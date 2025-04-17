@@ -5,6 +5,8 @@ from game_logic.buff_handler import grant_energy  # Central energy handling
 class Team:
     def trigger_mff_passive(self, attacker, boss):
         logs = []
+        if attacker.has_fear or attacker.has_silence:
+            return logs  # MFF passive does not trigger if attacker is disabled
         for hero in self.heroes:
             if isinstance(hero, MFF) and hero != attacker and hero.is_alive():
                 logs.extend(hero.passive_on_ally_attack(attacker, boss))
@@ -39,11 +41,19 @@ class Team:
         logs.extend(boss.active_skill(self.heroes, round_num))
         logs.extend(boss.basic_attack(self.heroes, round_num))
         logs.extend(boss.counterattack(self.heroes))
+
+        # NEW: Trigger post-boss passives like LBRM and PDE
+        for hero in self.heroes:
+            if hero.is_alive() and hasattr(hero, "passive_trigger"):
+                for ally in self.heroes:
+                    if ally != hero and ally.is_alive():
+                        logs.extend(hero.passive_trigger(ally, boss, self))
+
         return logs
 
     def end_of_round(self, boss, round_num):
         logs = []
-        logs.append(f"🔚 End of Round {round_num} effects begin.")
+        logs.append(f"🖚 End of Round {round_num} effects begin.")
         for hero in self.heroes:
             if hero.is_alive():
                 logs.extend(hero.end_of_round(boss, self, round_num))

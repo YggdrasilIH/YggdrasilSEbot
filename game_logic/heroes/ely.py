@@ -19,8 +19,8 @@ class ELY(Hero):
         logs.extend(hero_deal_damage(self, boss, self.atk * 14, is_active=True, team=team))
 
         shrink = {
-            "multiplier_dealt": 0.90,
-            "multiplier_received": 1.10,
+            "multiplier_dealt": 0.4,
+            "multiplier_received": 1.4,
             "rounds": 2
         }
 

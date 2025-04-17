@@ -1,11 +1,14 @@
 # main.py
-
+from dotenv import load_dotenv
+load_dotenv()
+import os
 import discord
 from discord.ext import commands
-import os
 from game_logic import Hero, Boss, Team  # Our __init__.py exposes these classes.
 from game_logic.artifacts import Scissors, DB, Mirror, Antlers
 from game_logic.cores import active_core, PDECore  # Import from the new cores module
+
+
 
 # Mapping dictionaries for converting acronyms.
 purify_mapping = {
@@ -301,8 +304,8 @@ async def debug_battle(interaction: discord.Interaction):
     from battle import simulate_battle
 
     hero_ids = [
-        "hero_SQH_Hero", "hero_LFA_Hero", "hero_DGN_Hero",
-        "hero_MFF_Hero", "hero_PDE_Hero", "hero_ELY_Hero"
+        "hero_SQH_Hero", "hero_MFF_Hero", "hero_DGN_Hero",
+        "hero_LFA_Hero", "hero_PDE_Hero", "hero_LBRM_Hero"
     ]
     stats = [(1e10, 1e9, 3000)] * 6  # High HP, ATK, SPD
 
@@ -331,4 +334,4 @@ async def on_ready():
     print(f"Synced commands: {[cmd.name for cmd in synced]}")
     print(f"Logged in as {bot.user}")
 
-bot.run(os.environ["DISCORD_TOKEN"])
+bot.run(os.getenv("DISCORD_TOKEN"))

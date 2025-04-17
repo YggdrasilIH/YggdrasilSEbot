@@ -40,6 +40,8 @@ class Hero:
         self.regen_buff = None
         self.poison_effects = []
         self.shield = 0
+        self.DR = 35
+        self.ADR = 8
         self.atk_reduction = 0
         self.armor_reduction = 0
         self.bleed = 0

@@ -1,5 +1,6 @@
 # game_logic/artifacts.py
 import random
+from game_logic.buff_handler import BuffHandler
 
 def stylize_log(category, message):
     icons = {
@@ -8,7 +9,7 @@ def stylize_log(category, message):
         "debuff": "🔻",
         "damage": "🟢",
         "heal": "🟣",
-        "control": "🟥",
+        "control": "🔵",
         "info": "📘"
     }
     icon = icons.get(category, "📘")
@@ -36,13 +37,17 @@ class DB(Artifact):
     def __init__(self):
         self.enabled = True
 
-    def on_active_skill(self, team):
+    def on_active_skill(self, team, boss):
         messages = []
         for hero in team.heroes:
-            hero.energy += 20
+            BuffHandler.apply_buff(hero, "db_energy", {
+                "attribute": "energy", "bonus": 20, "rounds": 1
+            }, boss)
             msg = stylize_log("energy", f"{hero.name} gains 20 energy from Demon Bell.")
             if random.random() < 0.5:
-                hero.energy += 10
+                BuffHandler.apply_buff(hero, "db_energy_extra", {
+                    "attribute": "energy", "bonus": 10, "rounds": 1
+                }, boss)
                 msg += " +10 extra!"
             messages.append(msg)
         return messages
@@ -59,8 +64,12 @@ class Mirror(Artifact):
             hero.all_damage_dealt += self.bonus
 
     def apply_end_of_round(self, hero, team, boss, round_num):
-        msgs = [stylize_log("energy", f"{hero.name} gains 15 energy from Mirror.")]
-        hero.energy += 15
+        msgs = []
+        BuffHandler.apply_buff(hero, "mirror_energy", {
+            "attribute": "energy", "bonus": 15, "rounds": 1
+        }, boss)
+        msgs.append(stylize_log("energy", f"{hero.name} gains 15 energy from Mirror."))
+
         if round_num - self.last_trigger_round >= 3:
             self.last_trigger_round = round_num
             self.bonus = 4.5

@@ -2,6 +2,7 @@ from .base import Hero
 import random
 from game_logic.damage_utils import hero_deal_damage
 from game_logic.buff_handler import BuffHandler
+from game_logic.control_effects import clear_control_effect
 
 class PDE(Hero):
     def __init__(self, name, hp, atk, armor, spd, crit_rate, crit_dmg, ctrl_immunity, hd, precision,
@@ -40,38 +41,35 @@ class PDE(Hero):
         logs.append(f"{self.name} grants mystical veil and regen to {target.name}.")
         return logs
 
-    def passive_trigger(self, team, boss):
+    def passive_trigger(self, ally, boss, team):
         logs = []
         controlled_allies = [
-            ally for ally in team.heroes if ally.is_alive() and (
-                ally.has_fear or ally.has_silence or ally.has_seal_of_light
+            h for h in team.heroes if h.is_alive() and (
+                h.has_fear or h.has_silence or h.has_seal_of_light
             )
         ]
         to_cleanse = controlled_allies[:2]
 
-        for ally in to_cleanse:
+        for h in to_cleanse:
             removed = []
-            if ally.has_fear:
-                ally.has_fear = False
-                ally.fear_rounds = 0
+            if h.has_fear:
+                logs.append(clear_control_effect(h, "fear"))
                 removed.append("Fear")
-            if ally.has_silence:
-                ally.has_silence = False
-                ally.silence_rounds = 0
+            if h.has_silence:
+                logs.append(clear_control_effect(h, "silence"))
                 removed.append("Silence")
-            if ally.has_seal_of_light:
-                ally.has_seal_of_light = False
-                ally.seal_rounds = 0
+            if h.has_seal_of_light:
+                logs.append(clear_control_effect(h, "seal_of_light"))
                 removed.append("Seal of Light")
             if removed:
-                logs.append(f"{self.name} removes {' and '.join(removed)} from {ally.name}.")
+                logs.append(f"{self.name} removes {' and '.join(removed)} from {h.name}.")
 
-        for ally in controlled_allies:
-            if ally not in to_cleanse:
-                logs.extend(BuffHandler.apply_buff(ally, "control_resist", {
+        for h in controlled_allies:
+            if h not in to_cleanse:
+                logs.extend(BuffHandler.apply_buff(h, "control_resist", {
                     "attribute": "control_immunity", "bonus": 15, "rounds": 3
                 }, boss))
-                logs.append(f"{self.name} grants +15% Control Immunity to {ally.name}.")
+                logs.append(f"{self.name} grants +15% Control Immunity to {h.name}.")
 
         logs.extend(BuffHandler.apply_debuff(boss, "speed_down", {
             "attribute": "speed", "bonus": -12, "rounds": 2
@@ -121,4 +119,10 @@ class PDE(Hero):
                 hero.apply_buff("all_dmg_up", {"bonus": 20, "rounds": 3})
                 logs.append(f"{hero.name} receives +20% all damage for 3 rounds.")
 
+        return logs
+
+    def on_end_of_round(self, team, boss):
+        logs = []
+        if self.transition_power >= 6:
+            logs.extend(self.release_transition_skill(boss, team))
         return logs

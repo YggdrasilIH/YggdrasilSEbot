@@ -80,7 +80,10 @@ def hero_deal_damage(source, target, base_damage, is_active, team):
 
     # Deal final damage
     damage = max(0, int(damage))
-    target.hp -= damage
+    if hasattr(target, "take_damage"):
+        target.take_damage(damage, source, team)
+    else:
+        target.hp -= damage
     logs.append(stylize_log("damage", f"{source.name} deals {damage} damage to {target.name} ({'CRIT' if crit else 'Normal'} hit)."))
 
     # Boss counterattack (only if target is boss and is_active/basic)

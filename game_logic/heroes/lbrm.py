@@ -2,6 +2,7 @@ from .base import Hero
 import random
 from game_logic.buff_handler import BuffHandler
 from game_logic.damage_utils import hero_deal_damage
+from game_logic.control_effects import clear_control_effect
 
 class LBRM(Hero):
     def __init__(self, name, hp, atk, armor, spd, crit_rate, crit_dmg, ctrl_immunity, hd, precision,
@@ -80,22 +81,19 @@ class LBRM(Hero):
         boss.hp -= extra
         return logs
 
-    def passive_trigger(self, ally):
+    def passive_trigger(self, ally, boss, team):
         logs = []
         if self.energy >= 30:
             self.energy -= 30
             removed = None
             if ally.has_silence:
-                ally.has_silence = False
-                ally.silence_rounds = 0
+                logs.append(clear_control_effect(ally, "silence"))
                 removed = "Silence"
             elif ally.has_fear:
-                ally.has_fear = False
-                ally.fear_rounds = 0
+                logs.append(clear_control_effect(ally, "fear"))
                 removed = "Fear"
             elif ally.has_seal_of_light:
-                ally.has_seal_of_light = False
-                ally.seal_rounds = 0
+                logs.append(clear_control_effect(ally, "seal_of_light"))
                 removed = "Seal"
             if removed:
                 self.power_of_dream += 1
