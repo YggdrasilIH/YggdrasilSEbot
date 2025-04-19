@@ -23,35 +23,39 @@ class BuffHandler:
 
     @staticmethod
     def apply_buff(hero, buff_name, buff_data, boss=None):
-        logs = []
         if BuffHandler.is_attribute_buff(buff_data) and hero.curse_of_decay > 0:
-            damage = int(boss.atk * 30) if boss else 0
-            hero.hp -= damage
+            if boss:
+                damage = int(boss.atk * 30)
+                hero.hp -= damage
+                msg = f"💀 Curse of Decay offsets {buff_data['attribute']} buff on {hero.name}. {hero.name} takes {damage / 1e6:.0f}M dmg."
+            else:
+                msg = f"💀 Curse of Decay offsets {buff_data['attribute']} buff on {hero.name}."
             hero.curse_of_decay -= 1
-            logs.append(f"{hero.name} offsets {buff_data['attribute']} buff with Curse of Decay, taking {damage} damage.")
-        else:
-            hero.buffs[buff_name] = buff_data
-            logs.append(f"{hero.name} gains buff '{buff_name}' with data: {buff_data}")
-        return logs
+            return False, msg
+
+        hero.buffs[buff_name] = buff_data
+        return True, None  # Buff applied successfully
 
     @staticmethod
     def apply_debuff(target, debuff_name, debuff_data):
         if BuffHandler.is_attribute_reduction(debuff_data):
             target.buffs[debuff_name] = debuff_data
-            return [f"{target.name} receives attribute reduction '{debuff_name}': {debuff_data}"]
+            attr = debuff_data.get('attribute', '')
+            val = debuff_data.get('bonus', '')
+            return [f"🔻 {target.name}: {val:+} {attr} ({debuff_data.get('rounds', '?')}r)"]
         else:
             target.buffs[debuff_name] = debuff_data
-            return [f"{target.name} receives skill effect or general debuff '{debuff_name}': {debuff_data}"]
+            return [f"🔻 {target.name}: {debuff_name} (skill effect)"]
 
     @staticmethod
     def cap_stats(hero):
         logs = []
         if hero.precision > 150:
             hero.precision = 150
-            logs.append(f"{hero.name}'s precision capped at 150.")
+            logs.append(f"📊 {hero.name}: Precision capped at 150")
         if hero.crit_dmg > 150:
             hero.crit_dmg = 150
-            logs.append(f"{hero.name}'s crit damage capped at 150.")
+            logs.append(f"📊 {hero.name}: Crit DMG capped at 150")
         return logs
 
 

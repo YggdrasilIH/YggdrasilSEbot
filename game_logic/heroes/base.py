@@ -101,7 +101,16 @@ class Hero:
             buff = self.buffs[buff_name]
             if "attribute" in buff and "bonus" in buff:
                 attr = buff["attribute"]
-                setattr(self, attr, getattr(self, attr) - buff["bonus"])
+                alias = {
+                    "control_immunity": "ctrl_immunity",
+                    "crit_damage": "crit_dmg",
+                    "crit_rate": "crit_rate",
+                    "damage_reduction": "DR",
+                    "all_damage_reduction": "ADR"
+                }
+                real_attr = alias.get(attr, attr)
+                if hasattr(self, real_attr):
+                    setattr(self, real_attr, getattr(self, real_attr) - buff["bonus"])
             if "crit_rate_increase" in buff:
                 self.crit_rate -= buff["crit_rate_increase"]
             if "crit_dmg_increase" in buff:
@@ -122,7 +131,7 @@ class Hero:
         if total_poison > 0:
             self.hp -= total_poison
             self.hp = max(self.hp, 0)
-            return f"{self.name} takes {total_poison} poison damage."
+            return f"☠️ {self.name}: {total_poison / 1e6:.0f}M Poison"
         return ""
 
     def apply_bleed(self, boss):
@@ -130,45 +139,33 @@ class Hero:
             bleed_damage = self.bleed
             boss.take_damage(bleed_damage)
             self.bleed_duration -= 1
-            return f"{self.name} deals {bleed_damage} bleed damage to {boss.name}."
+            label = f"🩸 {self.name} → {boss.name}: {bleed_damage / 1e6:.0f}M Bleed"
+            return label
         return None
 
-    def process_calamity(self):
-        messages = []
-        if self.calamity >= 5:
-            original_immunity = getattr(self, 'original_ctrl_immunity', 100)
-            min_allowed = max(0, original_immunity - 100)
-            self.ctrl_immunity = max(self.ctrl_immunity, min_allowed)
-
-            duration = 2
-            if active_core is not None:
-                duration = active_core.modify_control_duration(duration)
-
-            for effect in ["silence", "fear", "seal_of_light"]:
-                if self.immune_control_effect == effect:
-                    messages.append(f"{self.name} is immune to {effect.replace('_', ' ').title()}.")
-                    clear_control_effect(self, effect)
-                else:
-                    msg = apply_control_effect(self, effect, duration)
-                    messages.append(msg)
-
-            messages.append(f"{self.name}'s control immunity reduced by 100. Calamity triggered.")
-            self.calamity = 0
-        return messages
 
     def end_of_round(self, boss, team, round_num):
         messages = []
+        messages.append(f"🔄 End-of-Round for {self.name}")
+
         self.process_buffs()
+
         poison_msg = self.process_poison()
         if poison_msg:
             messages.append(poison_msg)
+
         bleed_msg = self.apply_bleed(boss)
         if bleed_msg:
             messages.append(bleed_msg)
-        messages.extend(self.process_calamity())
+
         messages.extend(BuffHandler.cap_stats(self))
+
         if self.artifact and hasattr(self.artifact, "apply_end_of_round"):
-            messages.extend(self.artifact.apply_end_of_round(self, team, boss, round_num))
+            artifact_logs = self.artifact.apply_end_of_round(self, team, boss, round_num)
+            if artifact_logs:
+                messages.extend(artifact_logs)
+
+        messages.append(f"📉 {self.get_status_description()}")
         return messages
 
     def apply_attribute_effect(self, effect, ratio):
@@ -191,26 +188,46 @@ class Hero:
         return messages
 
     def get_status_description(self):
-        status = f"{self.name} Status:\n"
-        status += f"  HP: {int(self.hp)}/{int(self.max_hp)}\n"
-        status += f"  Energy: {self.energy}\n"
-        status += f"  Control Immunity: {self.ctrl_immunity}\n"
-        status += f"  Calamity: {self.calamity}\n"
-        status += f"  Curse of Decay: {self.curse_of_decay}\n"
+        status = f"{self.name} Status:  HP {self.hp / 1e6:.0f}M/{self.max_hp / 1e6:.0f}M | Energy {self.energy} | Ctrl Imm {self.ctrl_immunity}"
+        status += f" | Calamity {self.calamity} | Curse {self.curse_of_decay}"
+
+        attr_buffs = []
+        attr_debuffs = []
+        for buff in self.buffs.values():
+            if isinstance(buff, dict) and "attribute" in buff and "bonus" in buff:
+                val = buff["bonus"]
+                label = f"{buff['attribute']}"
+                if val > 0:
+                    attr_buffs.append(f"+{val}{label}")
+                elif val < 0:
+                    attr_debuffs.append(f"{val}{label}")
+
         if self.atk_reduction:
-            status += f"  ATK Reduction: {self.atk_reduction*100:.0f}%\n"
+            attr_debuffs.append(f"-{self.atk_reduction*100:.0f}%ATK")
         if self.armor_reduction:
-            status += f"  Armor Reduction: {self.armor_reduction*100:.0f}%\n"
+            attr_debuffs.append(f"-{self.armor_reduction*100:.0f}%Armor")
+
+        if attr_buffs:
+            status += " | Buffs: " + ", ".join(attr_buffs)
+        if attr_debuffs:
+            status += " | Debuffs: " + ", ".join(attr_debuffs)
+
         control_effects = []
         if self.has_silence:
-            control_effects.append(f"Silence ({self.silence_rounds} rounds)")
+            control_effects.append(f"Silence({self.silence_rounds})")
         if self.has_fear:
-            control_effects.append(f"Fear ({self.fear_rounds} rounds)")
+            control_effects.append(f"Fear({self.fear_rounds})")
         if self.has_seal_of_light:
-            control_effects.append(f"Seal of Light ({self.seal_rounds} rounds)")
+            control_effects.append(f"Seal({self.seal_rounds})")
         if control_effects:
-            status += "  Control Effects: " + ", ".join(control_effects) + "\n"
-        status += f"  Immune to: {self.immune_control_effect}\n"
+            icon_map = {
+                "Silence": "🔇",
+                "Fear": "😱",
+                "Seal": "🔒"
+            }
+            styled = [f"{icon_map.get(effect.split('(')[0], '')}{effect}" for effect in control_effects]
+            status += " | Ctrl: " + ", ".join(styled)
+
         return status
 
     def trigger_foresight_basic(self):

@@ -23,6 +23,8 @@ class Artifact:
         return []
 
 class Scissors(Artifact):
+    def bind_team(self, team):
+        self.team = team
     def apply_end_of_round(self, hero, team, boss, round_num):
         replicated_msgs = []
         if hasattr(boss, "attribute_effects"):
@@ -34,25 +36,48 @@ class Scissors(Artifact):
         return replicated_msgs
 
 class DB(Artifact):
+    def bind_team(self, team):
+        self.team = team
     def __init__(self):
         self.enabled = True
 
     def on_active_skill(self, team, boss):
-        messages = []
+        gained = []
+        blocked = []
+        extras = []
+
         for hero in team.heroes:
-            BuffHandler.apply_buff(hero, "db_energy", {
+            success, msg = BuffHandler.apply_buff(hero, "db_energy", {
                 "attribute": "energy", "bonus": 20, "rounds": 1
             }, boss)
-            msg = stylize_log("energy", f"{hero.name} gains 20 energy from Demon Bell.")
-            if random.random() < 0.5:
-                BuffHandler.apply_buff(hero, "db_energy_extra", {
-                    "attribute": "energy", "bonus": 10, "rounds": 1
-                }, boss)
-                msg += " +10 extra!"
-            messages.append(msg)
-        return messages
+
+            if success:
+                gained.append(hero.name)
+                if random.random() < 0.5:
+                    extra_success, _ = BuffHandler.apply_buff(hero, "db_energy_extra", {
+                        "attribute": "energy", "bonus": 10, "rounds": 1
+                    }, boss)
+                    if extra_success:
+                        extras.append(hero.name)
+            else:
+                blocked.append(hero.name)
+                if msg:
+                    blocked.append(f"{hero.name} (blocked: {msg})")
+
+        msg_parts = []
+        if gained:
+            main = f"{', '.join(gained)} gain 20 energy"
+            if extras:
+                main += f" (+10 extra for {', '.join(extras)})"
+            msg_parts.append(main)
+        if blocked:
+            msg_parts.append(f"energy feed to {', '.join(blocked)} blocked by Curse of Decay")
+
+        return [stylize_log("energy", f"Demon Bell: {'; '.join(msg_parts)}.")]
 
 class Mirror(Artifact):
+    def bind_team(self, team):
+        self.team = team
     def __init__(self):
         self.last_trigger_round = -3
         self.bonus = 0

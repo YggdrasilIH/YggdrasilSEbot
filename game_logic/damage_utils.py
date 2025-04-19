@@ -56,10 +56,17 @@ def hero_deal_damage(source, target, base_damage, is_active, team):
         damage *= 1.30
         logs.append(stylize_log("damage", f"{source.name} deals +30% damage from Defier."))
 
-    # Cap damage reduction (DR) and all damage reduction (ADR)
-    total_reduction = getattr(target, "dr", 0) + getattr(target, "adr", 0)
-    total_reduction = min(total_reduction, 0.75)
-    damage *= (1 - total_reduction)
+    # DR reduction (offsettable)
+    dr = min(getattr(target, "dr", 0), 0.75)
+    if dr > 0:
+        logs.append(stylize_log("debuff", f"{target.name} reduces damage by {int(dr * 100)}% DR."))
+    damage *= (1 - dr)
+
+    # ADR reduction (non-offsettable)
+    adr = min(getattr(target, "adr", 0), 0.75)
+    if adr > 0:
+        logs.append(stylize_log("debuff", f"{target.name} reduces damage by {int(adr * 100)}% ADR."))
+    damage *= (1 - adr)
 
     # Apply shield first
     if target.shield > 0:
@@ -110,9 +117,15 @@ def apply_direct_damage(source, target, amount, team=None, ignore_shield=False, 
     damage = amount
 
     if not ignore_reduction:
-        total_reduction = getattr(target, "dr", 0) + getattr(target, "adr", 0)
-        total_reduction = min(total_reduction, 0.75)
-        damage *= (1 - total_reduction)
+        dr = min(getattr(target, "dr", 0), 0.75)
+        if dr > 0:
+            logs.append(stylize_log("debuff", f"{target.name} reduces damage by {int(dr * 100)}% DR."))
+        damage *= (1 - dr)
+
+        adr = min(getattr(target, "adr", 0), 0.75)
+        if adr > 0:
+            logs.append(stylize_log("debuff", f"{target.name} reduces damage by {int(adr * 100)}% ADR."))
+        damage *= (1 - adr)
 
     if not ignore_shield and target.shield > 0:
         if target.shield >= damage:

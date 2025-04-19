@@ -1,7 +1,7 @@
-# battle.py
-
 import textwrap
 from utils.log_utils import stylize_log
+
+DISCORD_MESSAGE_LIMIT = 1900
 
 def detect_category(line):
     lowered = line.lower()
@@ -20,8 +20,6 @@ def detect_category(line):
     if "passive" in lowered: return "passive"
     return ""
 
-DISCORD_MESSAGE_LIMIT = 1900  # Slightly below 2000 to account for formatting
-
 def format_logs_as_bullet_points(logs):
     return "\n".join(
         stylize_log(str(line), detect_category(str(line)))
@@ -30,7 +28,6 @@ def format_logs_as_bullet_points(logs):
     )
 
 def chunk_logs(log_block, limit=DISCORD_MESSAGE_LIMIT):
-    """Split long log blocks into chunks under the Discord limit."""
     chunks = []
     current_chunk = ""
     for line in log_block.split("\n"):
@@ -43,34 +40,67 @@ def chunk_logs(log_block, limit=DISCORD_MESSAGE_LIMIT):
     return chunks
 
 async def simulate_battle(interaction, team, boss, mode):
+    all_logs = []
+
+    # Trigger start-of-battle effects
+    battle_start_logs = []
+    for hero in team.heroes:
+        if hero.artifact and hasattr(hero.artifact, "apply_start_of_battle"):
+            result = hero.artifact.apply_start_of_battle(team, round_num=1)
+            if result:
+                battle_start_logs.extend(result)
+
+    for hero in team.heroes:
+        if hasattr(hero, "start_of_battle") and callable(hero.start_of_battle):
+            battle_start_logs.extend(hero.start_of_battle(team, boss))
+
     if mode == "detailed":
-        for round_num in range(1, 16):
-            if all(not h.is_alive() for h in team.heroes) or not boss.is_alive():
-                break
+        bullet_block = format_logs_as_bullet_points(battle_start_logs)
+        for chunk in chunk_logs(bullet_block):
+            await interaction.followup.send(chunk)
 
-            logs = [f"🔁 **Round {round_num}**"]
+    all_logs.extend(battle_start_logs)
 
-            for status in team.status_descriptions():
-                logs.append(f"📊 Status:\n{status}")
+    for round_num in range(1, 16):
+        round_logs = [f"🔁 **Round {round_num}**"]
 
-            logs += team.perform_turn(boss, round_num)
-            logs += team.end_of_round(boss, round_num)
+        for status in team.status_descriptions():
+            round_logs.append(f"📊 Status:\n{status}")
 
-            for status in team.status_descriptions():
-                logs.append(f"📉 Post-round Status:\n{status}")
+        round_logs += team.perform_turn(boss, round_num)
 
-            logs.append(f"💥 Boss HP: {int(boss.hp)} | 🏹 Total Damage: {int(boss.total_damage_taken)}")
+        if all(not h.is_alive() for h in team.heroes):
+            round_logs.append("❌ All heroes have fallen. Defeat!")
+            all_logs.extend(round_logs)
+            return all_logs
+        if not boss.is_alive():
+            round_logs.append("🏆 Boss defeated! Victory!")
+            all_logs.extend(round_logs)
+            return all_logs
 
-            bullet_block = format_logs_as_bullet_points(logs)
+        round_logs += team.end_of_round(boss, round_num)
+        for status in team.status_descriptions():
+            round_logs.append(f"📉 Post-round Status:\n{status}")
+        round_logs.append(f"💥 Boss HP: {int(boss.hp)} | 🏹 Total Damage: {int(boss.total_damage_taken)}")
+
+        all_logs.extend(round_logs)
+
+        if mode == "detailed":
+            bullet_block = format_logs_as_bullet_points(round_logs)
             for chunk in chunk_logs(bullet_block):
                 await interaction.followup.send(chunk)
 
+    # Final summary message
+    if all(not h.is_alive() for h in team.heroes):
+        all_logs.append("❌ All heroes have fallen. Defeat!")
+    elif not boss.is_alive():
+        all_logs.append("🏆 Boss defeated! Victory!")
     else:
-        for round_num in range(1, 16):
-            if all(not h.is_alive() for h in team.heroes) or not boss.is_alive():
-                break
-            team.perform_turn(boss, round_num)
-            team.end_of_round(boss, round_num)
-        await interaction.followup.send(
-            f"📜 Final Summary: Total Damage Dealt: {int(boss.total_damage_taken)}. Boss HP: {int(boss.hp)}."
-        )
+        all_logs.append("⏳ Battle ended after 15 rounds. Boss survived.")
+
+    if mode == "detailed":
+        bullet_block = format_logs_as_bullet_points(all_logs)
+        for chunk in chunk_logs(bullet_block):
+            await interaction.followup.send(chunk)
+
+    return all_logs

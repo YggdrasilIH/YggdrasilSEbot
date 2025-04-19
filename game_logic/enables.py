@@ -9,11 +9,11 @@ class Enable:
 class ControlPurify(Enable):
     def apply_end_of_round(self, hero, boss):
         effects = []
-        if hero.has_fear:
+        if hero.has_fear and hero.immune_control_effect != "fear":
             effects.append("fear")
-        if hero.has_silence:
+        if hero.has_silence and hero.immune_control_effect != "silence":
             effects.append("silence")
-        if hero.has_seal_of_light:
+        if hero.has_seal_of_light and hero.immune_control_effect != "seal_of_light":
             effects.append("seal_of_light")
 
         if effects:

@@ -11,6 +11,7 @@ class PDE(Hero):
                          purify_enable, trait_enable, artifact)
         self.transition_power = 0
         self.energy = 0
+        self.triggered_this_round = False
 
     def active_skill(self, boss, team):
         logs = []
@@ -41,30 +42,26 @@ class PDE(Hero):
         logs.append(f"{self.name} grants mystical veil and regen to {target.name}.")
         return logs
 
-    def passive_trigger(self, ally, boss, team):
+    def passive_trigger(self, allies, boss, team):
         logs = []
-        controlled_allies = [
-            h for h in team.heroes if h.is_alive() and (
-                h.has_fear or h.has_silence or h.has_seal_of_light
-            )
-        ]
-        to_cleanse = controlled_allies[:2]
+        controlled = [h for h in allies if h.is_alive() and (h.has_fear or h.has_silence or h.has_seal_of_light)]
+        to_cleanse = controlled[:2]
 
         for h in to_cleanse:
-            removed = []
+            effects = []
             if h.has_fear:
-                logs.append(clear_control_effect(h, "fear"))
-                removed.append("Fear")
+                effects.append("fear")
             if h.has_silence:
-                logs.append(clear_control_effect(h, "silence"))
-                removed.append("Silence")
+                effects.append("silence")
             if h.has_seal_of_light:
-                logs.append(clear_control_effect(h, "seal_of_light"))
-                removed.append("Seal of Light")
-            if removed:
-                logs.append(f"{self.name} removes {' and '.join(removed)} from {h.name}.")
+                effects.append("seal_of_light")
 
-        for h in controlled_allies:
+            if effects:
+                chosen = random.choice(effects)
+                logs.append(clear_control_effect(h, chosen))
+                logs.append(f"{self.name} removes {chosen.replace('_', ' ').title()} from {h.name}.")
+
+        for h in controlled:
             if h not in to_cleanse:
                 logs.extend(BuffHandler.apply_buff(h, "control_resist", {
                     "attribute": "control_immunity", "bonus": 15, "rounds": 3
@@ -79,7 +76,8 @@ class PDE(Hero):
 
     def on_receive_damage(self, damage, team, source):
         logs = []
-        if source.lower() in ["basic", "active"]:
+        if source.lower() in ["basic", "active"] and not self.triggered_this_round:
+            self.triggered_this_round = True
             if random.random() < 0.8:
                 self.transition_power += 1
                 logs.append(f"{self.name} gains 1 layer of Transition Power (now {self.transition_power}).")
@@ -112,9 +110,8 @@ class PDE(Hero):
         logs.append(f"{highest.name} receives +15% damage for 2 rounds.")
 
         if tp_before_release >= 6:
-            if hasattr(team, "boss"):
-                team.boss.apply_buff("atk_down", {"value": 0.20, "rounds": 2})
-                logs.append(f"{team.boss.name}'s attack is reduced by 20% for 2 rounds.")
+            team.boss.apply_buff("atk_down", {"value": 0.20, "rounds": 2})
+            logs.append(f"{team.boss.name}'s attack is reduced by 20% for 2 rounds.")
             for hero in team.back_line:
                 hero.apply_buff("all_dmg_up", {"bonus": 20, "rounds": 3})
                 logs.append(f"{hero.name} receives +20% all damage for 3 rounds.")
@@ -122,7 +119,5 @@ class PDE(Hero):
         return logs
 
     def on_end_of_round(self, team, boss):
-        logs = []
-        if self.transition_power >= 6:
-            logs.extend(self.release_transition_skill(boss, team))
-        return logs
+        self.triggered_this_round = False
+        return []

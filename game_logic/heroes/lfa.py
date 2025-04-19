@@ -39,9 +39,9 @@ class LFA(Hero):
         total_damage += self.atk * 12
 
         bonus_damage = int(total_damage * 1.20)
-        for enemy in team.heroes:
-            enemy.take_damage(bonus_damage)
-            logs.append(f"{self.name} deals {bonus_damage} bonus AOE damage to {enemy.name}.")
+        logs.extend(hero_deal_damage(self, boss, bonus_damage, is_active=True, team=team))
+        logs.append(f"{self.name} deals {bonus_damage} bonus AoE damage to {boss.name}.")
+
 
         self.transition_power += 6
         logs.append(f"{self.name} gains 6 layers of Transition Power (TP now: {self.transition_power}).")
