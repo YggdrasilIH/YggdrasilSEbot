@@ -40,8 +40,7 @@ class DGN(Hero):
         count = sum(1 for b in boss.buffs.values() if BuffHandler.is_attribute_reduction(b, strict=True))
         bonus = self.atk * 10 * count
         if bonus:
-            logs.append(f"{self.name} gains bonus damage for {count} attribute reductions.")
-            logs.extend(hero_deal_damage(self, boss, bonus, is_active=True, team=team, allow_counter=False, allow_crit=True))
+                        logs.extend(hero_deal_damage(self, boss, bonus, is_active=True, team=team, allow_counter=False, allow_crit=True))
 
         total = base + bonus
         aoe = int(total * 0.7)
@@ -73,8 +72,7 @@ class DGN(Hero):
         count = sum(1 for b in boss.buffs.values() if BuffHandler.is_attribute_reduction(b, strict=True))
         bonus = self.atk * 10 * count
         if bonus:
-            logs.append(f"{self.name} gains bonus damage for {count} attribute reductions.")
-            logs.extend(hero_deal_damage(self, boss, bonus, is_active=False, team=team, allow_counter=False, allow_crit=True))
+                        logs.extend(hero_deal_damage(self, boss, bonus, is_active=False, team=team, allow_counter=False, allow_crit=True))
 
         total = self.atk * 12 + bonus
         shield = int(total * 0.5)
@@ -104,7 +102,7 @@ class DGN(Hero):
 
         return logs
 
-    def on_end_of_round(self, team, boss):
+    def end_of_round(self, boss, team, round_num=None):
         logs = []
         if self.transition_power < 12:
             return logs
@@ -121,14 +119,12 @@ class DGN(Hero):
 
             debuff_count = sum(1 for b in enemy.buffs.values() if isinstance(b, dict))
             bonus = self.atk * 20 * debuff_count
-            logs.append(f"{self.name} deals {self.format_damage_log(bonus)} bonus damage to {enemy.name} based on {debuff_count} debuffs.")
             logs.extend(hero_deal_damage(self, enemy, bonus, is_active=True, team=team, allow_counter=False, allow_crit=False))
 
         target = min(targets, key=lambda e: e.hp if e.is_alive() else float('inf'))
         if target and target.is_alive():
             count = sum(1 for b in target.buffs.values() if isinstance(b, dict))
             bonus = self.atk * 6 * count
-            logs.append(f"{self.name} deals {self.format_damage_log(bonus)} additional damage to lowest HP target {target.name} from {count} debuffs.")
             logs.extend(hero_deal_damage(self, target, bonus, is_active=True, team=team, allow_counter=False, allow_crit=False))
 
         top_enemy = max(targets, key=lambda e: e.atk if e.is_alive() else -1)

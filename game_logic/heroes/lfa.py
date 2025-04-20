@@ -12,7 +12,7 @@ class LFA(Hero):
         self.transition_power = 0
 
     def active_skill(self, boss, team):
-        logs = []
+        logs = [f"💥 {self.name} uses Active Skill:"]
         if self.has_silence:
             logs.append(f"{self.name} is silenced and cannot use active skill.")
             return logs
@@ -20,30 +20,27 @@ class LFA(Hero):
         total_damage = 0
         for i in range(2):
             dmg = self.atk * 12
-            logs.append(f"🗡️ {self.name} deals {dmg:,} base damage (hit {i+1}/2).")
-            logs.extend(hero_deal_damage(self, boss, dmg, is_active=True, team=team, allow_counter=True, allow_crit=True))
+            logs.extend(hero_deal_damage(self, boss, dmg, is_active=True, team=team, allow_counter=(i == 0), allow_crit=True))
             total_damage += dmg
 
         if boss.hp < boss.max_hp * 0.60:
             second_total = 0
             for i in range(2):
                 dmg = self.atk * 12
-                logs.append(f"🗡️ {self.name} deals {dmg:,} base damage (extra hit {i+1}/2).")
-                logs.append(f"🗡️ {self.name} deals {dmg:,} base damage (final hit).")
-        logs.extend(hero_deal_damage(self, boss, dmg, is_active=True, team=team, allow_counter=False, allow_crit=True))
+                logs.append(f"🗡️ {self.name} deals {dmg // 1_000_000}M base damage (extra hit {i+1}/2).")
+                logs.extend(hero_deal_damage(self, boss, dmg, is_active=True, team=team, allow_counter=False, allow_crit=True))
                 second_total += dmg
                 total_damage += dmg
             heal_amt = int(second_total * 1.20)
             self.hp = min(self.max_hp, self.hp + heal_amt)
-            
-            logs.append(f"{self.name} heals for {heal_amt} HP from extra attacks.")
+            logs.append(f"❤️ {self.name} heals for {heal_amt // 1_000_000}M HP from extra attacks.")
 
         dmg = self.atk * 12
         logs.extend(hero_deal_damage(self, boss, dmg, is_active=True, team=team, allow_counter=False, allow_crit=True))
         total_damage += dmg
 
         bonus_damage = int(total_damage * 1.20)
-        logs.append(f"💣 {self.name} unleashes {bonus_damage:,} bonus burst damage.")
+        logs.append(f"💣 {self.name} unleashes {bonus_damage // 1_000_000}M bonus burst damage.")
         logs.extend(hero_deal_damage(self, boss, bonus_damage, is_active=True, team=team, allow_counter=False, allow_crit=False))
 
         self.transition_power += 6
@@ -55,7 +52,7 @@ class LFA(Hero):
         return logs
 
     def basic_attack(self, boss, team):
-        logs = []
+        logs = [f"🔪 {self.name} uses Basic Attack:"]
         if self.has_fear:
             logs.append(f"{self.name} is feared and cannot perform basic attack.")
             return logs
@@ -85,7 +82,7 @@ class LFA(Hero):
             cap_damage = int(self.atk * 15)
             extra_damage = min(extra_from_hp, cap_damage)
             total_damage += extra_damage
-            logs.append(f"💥 {self.name} deals {extra_damage} based on 8% of boss max HP (capped at 1500% ATK).")
+            logs.append(f"💥 {self.name} deals {extra_damage // 1_000_000}M based on 8% of boss max HP (capped at 1500% ATK).")
 
             logs.extend(BuffHandler.apply_debuff(boss, "atk_down_secondary", {"attribute": "atk", "bonus": -0.15, "rounds": 2}))
             logs.append(f"🔻 {boss.name} loses 15% ATK for 2 rounds.")

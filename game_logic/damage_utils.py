@@ -31,7 +31,7 @@ def hero_deal_damage(source, target, base_damage, is_active, team, allow_counter
         poison_bonus = getattr(source, "ef3_poison_bonus", 0)
         poison_extra = int(damage * poison_bonus)
         damage += poison_extra
-        logs.append(stylize_log("damage", f"{source.name} deals +{poison_extra} bonus poison damage to {target.name} (EF3 bonus)."))
+        logs.append(f"🟢 {source.name} deals +{poison_extra // 1_000_000}M bonus poison damage to {target.name} (EF3 bonus).")
 
     # Balanced Strike (Enable)
     if hasattr(source, "trait_enable") and hasattr(source.trait_enable, "apply_crit_bonus"):
@@ -39,9 +39,9 @@ def hero_deal_damage(source, target, base_damage, is_active, team, allow_counter
         damage += extra_dmg
         source.hp = min(source.max_hp, source.hp + heal_amt)
         if heal_amt:
-            logs.append(stylize_log("heal", f"{source.name} heals {heal_amt} HP from Balanced Strike."))
+            logs.append(f"❤️ {source.name} heals {heal_amt // 1_000_000}M HP from Balanced Strike.")
         if extra_dmg:
-            logs.append(stylize_log("damage", f"{source.name} deals +{extra_dmg} bonus damage from Balanced Strike."))
+            logs.append(f"🟢 {source.name} deals +{extra_dmg // 1_000_000}M bonus damage from Balanced Strike.")
 
     # Giant Killer (GK)
     if getattr(source, "gk", False) and source.hp > 0:
@@ -50,12 +50,12 @@ def hero_deal_damage(source, target, base_damage, is_active, team, allow_counter
             bonus_steps = floor((ratio - 1) / 0.10)
             bonus_multiplier = min(bonus_steps * 0.02, 1.0)
             damage *= (1 + bonus_multiplier)
-            logs.append(stylize_log("damage", f"{source.name} deals +{int(bonus_multiplier * 100)}% damage from Giant Killer."))
+            logs.append(f"🟢 {source.name} deals +{int(bonus_multiplier * 100)}% damage from Giant Killer.")
 
     # Defier (DEF)
     if getattr(source, "defier", False) and target.hp >= 0.70 * target.max_hp:
         damage *= 1.30
-        logs.append(stylize_log("damage", f"{source.name} deals +30% damage from Defier."))
+        logs.append(f"🟢 {source.name} deals +30% damage from Defier.")
 
     # DR reduction (offsettable)
     dr = min(getattr(target, "dr", 0), 0.75)
@@ -73,10 +73,10 @@ def hero_deal_damage(source, target, base_damage, is_active, team, allow_counter
     if target.shield > 0:
         if target.shield >= damage:
             target.shield -= damage
-            logs.append(stylize_log("shield", f"{target.name}'s shield absorbs {int(damage)} damage."))
+            logs.append(f"🛡️ {target.name}'s shield absorbs {int(damage) // 1_000_000}M damage.")
             damage = 0
         else:
-            logs.append(stylize_log("shield", f"{target.name}'s shield absorbs {int(target.shield)} damage."))
+            logs.append(f"🛡️ {target.name}'s shield absorbs {int(target.shield) // 1_000_000}M damage.")
             damage -= target.shield
             target.shield = 0
 
@@ -88,13 +88,18 @@ def hero_deal_damage(source, target, base_damage, is_active, team, allow_counter
 
     # Deal final damage
     damage = max(0, int(damage))
+    if hasattr(source, "total_damage_dealt"):
+        source.total_damage_dealt += damage
+
     if hasattr(target, "take_damage"):
         extra_logs = target.take_damage(damage, source, team)
         if isinstance(extra_logs, list):
             logs.extend(extra_logs)
     else:
         target.hp -= damage
-    logs.append(stylize_log("damage", f"{source.name} deals {damage} damage to {target.name} ({'CRIT' if crit else 'Normal'} hit)."))
+        
+    if isinstance(damage, int) and damage > 0:
+        logs.append(f"🟢 {source.name} deals {damage // 1_000_000}M damage to {target.name} ({'CRIT' if crit else 'Normal'} hit).")
 
     # Trigger after-attack effects
     if hasattr(source, "after_attack"):

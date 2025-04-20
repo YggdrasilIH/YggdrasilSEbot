@@ -25,7 +25,7 @@ def simulate_dgn():
         boss.apply_buff(f"replicated_{name}", buff)
         logs.append(f"DGN replicates {name} back onto {boss.name}.")
 
-    logs.extend(dgn.on_end_of_round(team, boss))
+    logs.extend(dgn.end_of_round(boss, team, round_num=1))
 
     # Test basic attack
     logs.append("--- Basic Attack ---")

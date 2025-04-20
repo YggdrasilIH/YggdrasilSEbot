@@ -74,22 +74,26 @@ class PDE(Hero):
         logs.append(f"{self.name} reduces {boss.name}'s speed by 12 for 2 rounds.")
         return logs
 
-    def on_receive_damage(self, damage, team, source):
+    def on_receive_damage(self, attacker, team, attack_type):
         logs = []
-        if source.lower() in ["basic", "active"] and not self.triggered_this_round:
-            self.triggered_this_round = True
-            if random.random() < 0.8:
-                self.transition_power += 1
-                logs.append(f"{self.name} gains 1 layer of Transition Power (now {self.transition_power}).")
+        if attack_type.lower() in ["basic", "active"]:
             if self.transition_power >= 3:
-                logs.extend(self.release_transition_skill(team, self.transition_power))
+                logs.append(f"{self.name} is struck by a {attack_type.lower()} skill and triggers transition skill.")
+                logs.extend(self.release_transition_skill(team, self.transition_power, attacker))
+            else:
+                if not self.triggered_this_round and random.random() < 0.8:
+                    self.transition_power += 1
+                    logs.append(f"{self.name} gains 1 layer of Transition Power (now {self.transition_power}).")
+            self.triggered_this_round = True
         return logs
 
-    def release_transition_skill(self, team, tp_before_release):
+    def release_transition_skill(self, team, tp_before_release, boss):
         logs = []
-        consume = 18 if tp_before_release >= 18 else 3
-        self.transition_power -= consume
-        logs.append(f"{self.name} consumes {consume} TP to release Transition Skill.")
+        if tp_before_release >= 18:
+            self.transition_power -= 18
+            logs.append(f"{self.name} consumes all 18 TP to release full Transition Skill.")
+        else:
+            logs.append(f"{self.name} releases Transition Skill (no TP consumed).")
         target = min([h for h in team.heroes if h.is_alive()], key=lambda h: h.hp, default=self)
 
         self.apply_buff("mystical_veil", {"layers": 1, "rounds": 2})
@@ -99,25 +103,25 @@ class PDE(Hero):
         heal_amt = int(self.atk * 12)
         self.hp = min(self.max_hp, self.hp + heal_amt)
         target.hp = min(target.max_hp, target.hp + heal_amt)
-        logs.append(f"{self.name} and {target.name} are healed for {heal_amt} HP each.")
+        logs.append(f"{self.name} and {target.name} are healed for {heal_amt // 1_000_000}M HP each.")
 
         for hero in team.back_line:
-            hero.apply_buff("hd_up", {"bonus": hero.hd * 0.10, "rounds": 2})
+            BuffHandler.apply_buff(hero, "hd_up", {"attribute": "hd", "bonus": hero.hd * 0.10, "rounds": 2}, boss)
             logs.append(f"{hero.name} receives +10% HD for 2 rounds.")
 
         highest = max(team.heroes, key=lambda h: h.atk)
-        highest.apply_buff("dmg_up", {"bonus": 15, "rounds": 2})
+        BuffHandler.apply_buff(highest, "dmg_up", {"attribute": "all_damage_dealt", "bonus": 15, "rounds": 2}, boss)
         logs.append(f"{highest.name} receives +15% damage for 2 rounds.")
 
         if tp_before_release >= 6:
-            team.boss.apply_buff("atk_down", {"value": 0.20, "rounds": 2})
-            logs.append(f"{team.boss.name}'s attack is reduced by 20% for 2 rounds.")
+            boss.apply_buff("atk_down", {"value": 0.20, "rounds": 2})
+            logs.append(f"{boss.name}'s attack is reduced by 20% for 2 rounds.")
             for hero in team.back_line:
-                hero.apply_buff("all_dmg_up", {"bonus": 20, "rounds": 3})
+                BuffHandler.apply_buff(hero, "all_dmg_up", {"attribute": "all_damage_dealt", "bonus": 20, "rounds": 3}, boss)
                 logs.append(f"{hero.name} receives +20% all damage for 3 rounds.")
 
         return logs
 
-    def on_end_of_round(self, team, boss):
+    def end_of_round(self, boss, team, round_num=None):
         self.triggered_this_round = False
         return []

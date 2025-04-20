@@ -107,8 +107,9 @@ class Mirror(Artifact):
 
 class Antlers(Artifact):
     def apply_end_of_round(self, hero, team, boss, round_num):
-        if not hasattr(hero, "antler_buff"):
-            hero.antler_buff = 0
+        if not hasattr(hero, "antler_stacks"):
+            hero.antler_stacks = 0
+        hero.antler_stacks += 1
+        bonus = 9 * hero.antler_stacks
         hero.all_damage_dealt += 9
-        hero.antler_buff = 15
-        return [stylize_log("buff", f"{hero.name} gains 9% all damage from Antlers.")]
+        return [stylize_log("buff", f"{hero.name} gains +9% all damage from Antlers (Total: {bonus}%).")]

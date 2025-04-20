@@ -51,6 +51,7 @@ class Hero:
         self.immune_control_effect = random.choice(["fear", "silence", "seal_of_light"])
         self.gk = False
         self.defier = False
+        self.total_damage_dealt = 0
         self.purify_enable = purify_enable
         self.trait_enable = trait_enable
 

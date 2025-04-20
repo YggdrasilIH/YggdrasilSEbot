@@ -7,12 +7,6 @@ class Team:
         logs = []
         if attacker.has_fear or attacker.has_silence:
             return logs  # MFF passive does not trigger if attacker is disabled
-
-        for hero in self.heroes:
-            if isinstance(hero, MFF) and hero != attacker and hero.is_alive():
-                logs.extend(hero.passive_on_ally_attack(attacker, boss))
-        return logs  # MFF passive does not trigger if attacker is disabled
-        
         for hero in self.heroes:
             if isinstance(hero, MFF) and hero != attacker and hero.is_alive():
                 logs.extend(hero.passive_on_ally_attack(attacker, boss))
@@ -23,7 +17,6 @@ class Team:
         self.front_line = front_line
         self.back_line = back_line
 
-          # ✅ Give each hero a reference to their team
         for hero in self.heroes:
             hero.team = self
             if hero.artifact and hasattr(hero.artifact, "bind_team"):
@@ -45,7 +38,6 @@ class Team:
         if not boss.is_alive():
             return logs
 
-        # ✅ Grant 50 energy to all heroes at the start of the round (consolidated)
         from game_logic.buff_handler import BuffHandler
         energy_gain_lines = []
         curse_lines = []
@@ -68,6 +60,7 @@ class Team:
                 logs.append(f"⚡ Start-of-Round Energy: {', '.join(names)} (+{amount})")
         if curse_lines:
             logs.extend([str(l) for l in curse_lines if isinstance(l, str)])
+
         if not boss.is_alive():
             return logs
         logs.append(f"⚔️ Team begins actions for Round {round_num}.")
@@ -77,11 +70,21 @@ class Team:
                 if hero.energy >= 100 and not hero.has_silence:
                     logs.append(f"💥 {hero.name} has enough energy for active skill.")
                     skill_logs = hero.active_skill(boss, self)
+                    add_targets = []
+                    for ally in self.heroes:
+                        if ally.is_alive():
+                            logs.extend(BuffHandler.apply_buff(ally, f"add_on_{hero.name}_active", {
+                                "attribute": "all_damage_dealt", "bonus": 3, "rounds": 1
+                            }, boss))
+                            add_targets.append(ally.name)
+                    if add_targets:
+                        logs.append(f"✨ All Damage Dealt +3%: {', '.join(add_targets)} (from {hero.name}'s active skill)")
                     logs.extend(skill_logs)
+                    if hero.artifact and hasattr(hero.artifact, "on_active_skill"):
+                        logs.extend(hero.artifact.on_active_skill(self, boss))
                     logs.extend(self.trigger_mff_passive(hero, boss))
                     logs.extend(apply_foresight(hero, "active"))
                     hero.energy = 0
-                    logs.append(grant_energy(hero, 50))
 
                     crit_occurred = any("CRIT" in str(line) for line in skill_logs)
                     self.energy_gain_on_being_hit(boss, logs, crit_occurred)
@@ -109,7 +112,6 @@ class Team:
             if hero.is_alive():
                 self.energy_gain_on_being_hit(hero, logs, crit_occurred)
 
-        # NEW: Trigger post-boss passives like LBRM and PDE
         for hero in self.heroes:
             if hero.is_alive() and hasattr(hero, "passive_trigger"):
                 if hero.__class__.__name__ == "PDE":
@@ -128,7 +130,27 @@ class Team:
         logs.append(f"🖚 End of Round {round_num} effects begin.")
         for hero in self.heroes:
             if hero.is_alive():
-                logs.extend(hero.end_of_round(boss, self, round_num))
+                hero_logs = hero.end_of_round(boss, self, round_num)
+                scissors_logs = [entry for entry in hero_logs if "Scissors" in entry]
+                non_scissors_logs = [entry for entry in hero_logs if entry not in scissors_logs]
+                if hero.artifact and any("Mirror" in str(type(hero.artifact)) for _ in [0]):
+                    for entry in hero_logs:
+                        if "energy" in entry.lower():
+                            logs.append(entry)
+                        elif "offsets" in entry:
+                            logs.append(entry)
+                if scissors_logs:
+                    effect_map = {}
+                    for entry in scissors_logs:
+                        if "replicates" in entry:
+                            parts = entry.split("replicates")
+                            hero_name = parts[0].strip().split()[-1]
+                            effect = parts[1].strip().split("from")[0].strip()
+                            effect_map.setdefault(effect, []).append(hero_name)
+                    logs.append("✂️ Scissors Replication:")
+                    for effect, heroes in effect_map.items():
+                        logs.append(f"  {effect}: {', '.join(heroes)}")
+                logs.extend(non_scissors_logs)
         logs.extend(boss.end_of_round_effects(self.heroes, round_num))
         logs.append(f"🧠 Boss and team end-of-round effects completed.")
         return logs

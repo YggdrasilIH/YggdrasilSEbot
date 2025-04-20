@@ -34,7 +34,6 @@ class SQH(Hero):
 
         logs.append(f"🎯 {self.name} uses Active Skill:")
         dmg = self.atk * 18
-        logs.append(f"{self.name} deals {self.format_damage_log(dmg)} to {boss.name}.")
         logs.extend(hero_deal_damage(self, boss, dmg, is_active=True, team=team, allow_counter=True, allow_crit=True))
 
         boss.bleed = self.atk * 18
@@ -69,10 +68,11 @@ class SQH(Hero):
         if self.has_fear:
             logs.append(f"{self.name} is feared and cannot use basic attack.")
             return logs
+
         logs.append(f"🔪 {self.name} uses Basic Attack:")
         dmg = self.atk * 12
-        logs.append(f"{self.name} deals {self.format_damage_log(dmg)} to {boss.name}.")
         logs.extend(hero_deal_damage(self, boss, dmg, is_active=False, team=team, allow_counter=True, allow_crit=True))
+
         logs.extend(BuffHandler.apply_debuff(boss, "crit_down_basic", {
             "attribute": "crit_rate",
             "bonus": -0.25,
@@ -81,11 +81,6 @@ class SQH(Hero):
         logs.append(f"📉 {boss.name} receives -25% Crit Rate for 2 rounds.")
         logs.extend(self.apply_attribute_buff_with_curse("crit_rate", 18, boss))
         logs.extend(self.apply_attribute_buff_with_curse("crit_dmg", 18, boss))
-        return logs
-        logs.append(f"🔪 {self.name} uses Basic Attack:")
-        dmg = self.atk * 12
-        logs.append(f"{self.name} deals {self.format_damage_log(dmg)} to {boss.name}.")
-        logs.extend(hero_deal_damage(self, boss, dmg, is_active=False, team=team))
         return logs
 
     def release_transition_skill(self, team, boss):
@@ -125,7 +120,6 @@ class SQH(Hero):
             logs.append("⚡ All allies gain +20 energy.")
 
         logs.extend(BuffHandler.apply_debuff(boss, "atk_down", {"attribute": "atk", "bonus": -0.15, "rounds": 2}))
-        reduction = int(boss.atk * 0.15)
         logs.append(f"🔻 Boss loses 15% ATK for 2 rounds.")
 
         heal_all = int(self.atk * 12)
@@ -135,7 +129,7 @@ class SQH(Hero):
 
         return logs
 
-    def on_end_of_round(self, team, boss):
+    def end_of_round(self, boss, team, round_num=None):
         logs = []
         heal_self = int(self.max_hp * 0.20)
         self.hp = min(self.max_hp, self.hp + heal_self)
@@ -155,15 +149,16 @@ class SQH(Hero):
     def take_damage(self, damage, source=None, team=None):
         self.hp -= damage
         self.hp = max(self.hp, 0)
-        logs = []
+        logs = [f"⚔️ {self.name} takes {self.format_damage_log(damage)} (HP: {self.hp}/{self.max_hp})."]
         if source and source.is_alive():
             counters = []
             for ally in team.heroes if team else []:
                 if ally != self and ally.is_alive() and getattr(ally, "queens_guard", False):
                     counter_dmg = int(ally.atk * 12)
                     source.hp -= counter_dmg
+                    source.hp = max(source.hp, 0)
                     counters.append(f"{ally.name} hits back for {self.format_damage_log(counter_dmg)}")
-                    logs.extend(BuffHandler.apply_debuff(source, "atk_down", {
+                    logs.extend(BuffHandler.apply_debuff(source, "atk_down_counter", {
                         "attribute": "atk", "bonus": -0.03, "rounds": 2
                     }))
             if counters:
