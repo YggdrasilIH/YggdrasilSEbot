@@ -62,7 +62,7 @@ class Boss:
 
         self.hp -= effective_dmg
         self.total_damage_taken += effective_dmg
-        logs.append(f"💥 Boss takes {int(effective_dmg / 1e6):.0f}M damage")
+        logs.append(stylize_log("damage", f"Boss takes {int(effective_dmg / 1e6):.0f}M damage."))
         return logs
 
     def counterattack(self, heroes):
@@ -195,7 +195,7 @@ class Boss:
         return status
 
     def active_skill(self, heroes, round_num):
-        logs = ["💥 Boss uses Active Skill:"]
+        logs = []
         dmg_lines = []
         calamity_targets = []
         for hero in heroes:
@@ -212,15 +212,16 @@ class Boss:
             hero.curse_of_decay += 2
             calamity_targets.append(hero)
         if dmg_lines:
-            logs.append("🔥 Damage: " + ", ".join(dmg_lines))
-            logs.append("🔻 -100% Armor, -8% ATK (3r), +2 Curse")
+            for line in dmg_lines:
+                logs.append(f"💥 Boss hits {line} with Active Skill.")
+                logs.append("💀 Inflicts 2 Curse of Decay.")
         if calamity_targets:
             for hero in calamity_targets:
                 add_calamity(hero, 2, logs, boss=self)
         return logs
 
     def basic_attack(self, heroes, round_num):
-        logs = ["🔪 Boss uses Basic Attack:"]
+        logs = []
         dmg_lines = []
         calamity_targets = []
         for hero in heroes:
@@ -235,8 +236,9 @@ class Boss:
             hero.apply_buff("crit_down", {"attribute": "crit_rate", "bonus": -20, "rounds": 3})
             calamity_targets.append(hero)
         if dmg_lines:
-            logs.append("🔥 Damage: " + ", ".join(dmg_lines))
-            logs.append("❌ -Crit Rate (3r), +1 Calamity (+1 more at 75%)")
+            for line in dmg_lines:
+                logs.append(f"💥 Boss hits {line} with Basic Attack.")
+                logs.append("💀 Inflicts 1 Calamity (75% chance for +1 more).")
         for hero in calamity_targets:
             add_calamity(hero, 1, logs, boss=self)
             if random.random() < 0.75:

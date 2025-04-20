@@ -1,293 +1,163 @@
+
 from dotenv import load_dotenv
 load_dotenv()
 import os
 import discord
 from discord.ext import commands
-from game_logic import Hero, Boss, Team  # Our __init__.py exposes these classes.
+from game_logic import Hero, Boss, Team
 from game_logic.artifacts import Scissors, DB, Mirror, Antlers
 from game_logic.cores import active_core, PDECore
 
-# Mapping dictionaries for converting acronyms.
-purify_mapping = {
-    "CP": "Control_Purify",
-    "ARP": "Attribute_Reduction_Purify",
-    "MP": "Mark_Purify"
-}
-trait_mapping = {
-    "BS": "Balanced_Strike",
-    "UW": "Unbending_Will"
-}
+purify_mapping = {"CP": "Control_Purify", "ARP": "Attribute_Reduction_Purify", "MP": "Mark_Purify"}
+trait_mapping = {"BS": "Balanced_Strike", "UW": "Unbending_Will"}
 hero_acronym_mapping = {
-    "SQH": "hero_SQH_Hero",
-    "LFA": "hero_LFA_Hero",
-    "MFF": "hero_MFF_Hero",
-    "ELY": "hero_ELY_Hero",
-    "PDE": "hero_PDE_Hero",
-    "LBRM": "hero_LBRM_Hero",
-    "DGN": "hero_DGN_Hero"
+    "SQH": "hero_SQH_Hero", "LFA": "hero_LFA_Hero", "MFF": "hero_MFF_Hero",
+    "ELY": "hero_ELY_Hero", "PDE": "hero_PDE_Hero", "LBRM": "hero_LBRM_Hero", "DGN": "hero_DGN_Hero"
 }
 
-# Utility function to parse numbers with optional shorthand suffixes.
 def parse_number(s):
     s = s.strip()
-    if s[-1].lower() == "b":
-        return float(s[:-1]) * 1e9
-    elif s[-1].lower() == "m":
-        return float(s[:-1]) * 1e6
-    elif s[-1].lower() == "k":
-        return float(s[:-1]) * 1e3
-    else:
-        return float(s)
+    if s[-1].lower() == "b": return float(s[:-1]) * 1e9
+    if s[-1].lower() == "m": return float(s[:-1]) * 1e6
+    if s[-1].lower() == "k": return float(s[:-1]) * 1e3
+    return float(s)
 
-# Artifact mapping function.
-def get_artifact_instance(artifact_code):
-    code = artifact_code.strip().lower()
-    if not code or code == "none":
-        return None
-    elif code == "scissors":
-        return Scissors()
-    elif code == "db":
-        return DB()
-    elif code == "mirror":
-        return Mirror()
-    elif code == "antlers":
-        return Antlers()
-    else:
-        return None
+def get_artifact_instance(code):
+    code = code.strip().lower()
+    return {
+        "scissors": Scissors(), "db": DB(), "mirror": Mirror(), "antlers": Antlers()
+    }.get(code, None)
 
-# Global dictionary to store pending team configurations per user.
 pending_teams = {}
-
-# Define bot intents.
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 tree = bot.tree
-
-# Replace with your actual Discord Guild ID.
 guild_id = discord.Object(id=1358992627424428176)
 
 @tree.command(name="startgame", description="Start the boss battle game", guild=guild_id)
 async def start_game(interaction: discord.Interaction):
-    await interaction.response.send_message(
-        "Enter your hero lineup as a comma-separated list of acronyms (positions 1 to 6, in order). \n"
-        "Example: SQH, LFA, MFF, ELY, PDE, DGN",
-        ephemeral=True
-    )
+    await interaction.response.send_message("Enter 6 hero acronyms (e.g., SQH, LFA, MFF...):", ephemeral=True)
+    def check(m): return m.author == interaction.user and m.channel == interaction.channel
 
-    def check_message(m):
-        return m.author == interaction.user and m.channel == interaction.channel
-
-    try:
-        lineup_msg = await bot.wait_for("message", check=check_message, timeout=120)
-    except Exception:
-        await interaction.followup.send("Timed out waiting for hero lineup input.", ephemeral=True)
-        return
+    try: lineup_msg = await bot.wait_for("message", check=check, timeout=120)
+    except: await interaction.followup.send("⏱️ Timed out.", ephemeral=True); return
 
     selected = [x.strip().upper() for x in lineup_msg.content.split(",") if x.strip()]
     if len(selected) != 6:
-        await interaction.followup.send("Error: You must enter exactly 6 hero acronyms.", ephemeral=True)
-        return
+        await interaction.followup.send("❌ Must provide exactly 6 acronyms.", ephemeral=True); return
 
-    for hero_acr in selected:
-        if hero_acr not in hero_acronym_mapping:
-            await interaction.followup.send(f"Error: Unknown hero acronym: {hero_acr}", ephemeral=True)
+    mapped_ids = []
+    for acr in selected:
+        if acr not in hero_acronym_mapping:
+            await interaction.followup.send(f"❌ Unknown hero acronym: {acr}", ephemeral=True)
             return
+        mapped_ids.append(hero_acronym_mapping[acr])
 
     user_id = interaction.user.id
-    pending_teams[user_id] = {
-        "expected": [hero_acronym_mapping[acr] for acr in selected],
-        "enables": {},
-        "heroes": []
-    }
-    await interaction.followup.send("Now, please enter enable settings for each hero using the following format:\n"
-                                    "Example: SQH CP UW; LFA ARP UW; MFF CP BS; ELY CP BS; PDE ARP UW; DGN MP UW",
-                                    ephemeral=True)
+    pending_teams[user_id] = {"expected": mapped_ids, "enables": {}, "heroes": []}
 
-    try:
-        enables_msg = await bot.wait_for("message", check=check_message, timeout=120)
-    except Exception:
-        await interaction.followup.send("Timed out waiting for enable settings.", ephemeral=True)
-        return
-    entries = [entry.strip() for entry in enables_msg.content.strip().split(";") if entry.strip()]
-    for entry in entries:
-        parts = entry.split()
-        if len(parts) != 3:
-            await interaction.followup.send(f"Error: Invalid format in entry '{entry}'. Expected e.g., SQH CP UW", ephemeral=True)
-            return
-        hero_acr, purify_code, trait_code = parts
-        if hero_acr not in hero_acronym_mapping:
-            await interaction.followup.send(f"Error: Unknown hero acronym: {hero_acr}", ephemeral=True)
-            return
-        if purify_code not in purify_mapping or trait_code not in trait_mapping:
-            await interaction.followup.send(f"Error: Invalid codes in entry: '{entry}'", ephemeral=True)
-            return
-        full_hero_id = hero_acronym_mapping[hero_acr]
-        pending_teams[user_id]["enables"][full_hero_id] = (purify_mapping[purify_code], trait_mapping[trait_code])
+    await interaction.followup.send("Enter enable settings (e.g., SQH CP UW; LFA ARP UW; ...):", ephemeral=True)
+    try: enables_msg = await bot.wait_for("message", check=check, timeout=120)
+    except: await interaction.followup.send("⏱️ Timed out.", ephemeral=True); return
 
-    await interaction.followup.send("Enter comma-separated HP values for the heroes (lineup order; suffixes B, M, K allowed):", ephemeral=True)
-    try:
-        hp_msg = await bot.wait_for("message", check=check_message, timeout=120)
-    except Exception:
-        await interaction.followup.send("Timed out waiting for HP values.", ephemeral=True)
-        return
-    try:
-        hp_values = [parse_number(val) for val in hp_msg.content.split(",") if val.strip()]
-    except Exception as e:
-        await interaction.followup.send(f"Error parsing HP values: {e}", ephemeral=True)
-        return
+    for entry in enables_msg.content.strip().split(";"):
+        parts = entry.strip().split()
+        if len(parts) != 3: continue
+        hero, purify, trait = parts
+        full_id = hero_acronym_mapping.get(hero.upper())
+        if full_id and purify in purify_mapping and trait in trait_mapping:
+            pending_teams[user_id]["enables"][full_id] = (purify_mapping[purify], trait_mapping[trait])
 
-    await interaction.followup.send("Enter comma-separated ATK values (lineup order; suffixes allowed):", ephemeral=True)
-    try:
-        atk_msg = await bot.wait_for("message", check=check_message, timeout=120)
-    except Exception:
-        await interaction.followup.send("Timed out waiting for ATK values.", ephemeral=True)
-        return
-    try:
-        atk_values = [parse_number(val) for val in atk_msg.content.split(",") if val.strip()]
-    except Exception as e:
-        await interaction.followup.send(f"Error parsing ATK values: {e}", ephemeral=True)
-        return
+    await interaction.followup.send("Enter HP values (comma-separated):", ephemeral=True)
+    hp = [parse_number(v) for v in (await bot.wait_for("message", check=check, timeout=120)).content.split(",")]
 
-    await interaction.followup.send("Enter comma-separated SPD values (lineup order):", ephemeral=True)
-    try:
-        spd_msg = await bot.wait_for("message", check=check_message, timeout=120)
-    except Exception:
-        await interaction.followup.send("Timed out waiting for SPD values.", ephemeral=True)
-        return
-    try:
-        spd_values = [parse_number(val) for val in spd_msg.content.split(",") if val.strip()]
-    except Exception as e:
-        await interaction.followup.send(f"Error parsing SPD values: {e}", ephemeral=True)
-        return
+    await interaction.followup.send("Enter ATK values (comma-separated):", ephemeral=True)
+    atk = [parse_number(v) for v in (await bot.wait_for("message", check=check, timeout=120)).content.split(",")]
 
-    if not (len(hp_values) == len(atk_values) == len(spd_values) == len(pending_teams[user_id]["expected"])):
-        await interaction.followup.send("Error: The number of stat values does not match the number of heroes selected.", ephemeral=True)
-        return
+    await interaction.followup.send("Enter SPD values (comma-separated):", ephemeral=True)
+    spd = [parse_number(v) for v in (await bot.wait_for("message", check=check, timeout=120)).content.split(",")]
 
-    await interaction.followup.send("Enter artifact codes for each hero as a comma-separated list (lineup order):", ephemeral=True)
-    await interaction.followup.send("Valid codes: None, Scissors, DB, Mirror, Antlers", ephemeral=True)
-    try:
-        artifact_msg = await bot.wait_for("message", check=check_message, timeout=120)
-    except Exception:
-        await interaction.followup.send("Timed out waiting for artifact selection.", ephemeral=True)
-        return
-    artifact_codes = [code.strip() for code in artifact_msg.content.split(",") if code.strip()]
-    if len(artifact_codes) != len(pending_teams[user_id]["expected"]):
-        await interaction.followup.send("Error: The number of artifact codes must match the number of heroes selected.", ephemeral=True)
-        return
+    await interaction.followup.send("Enter artifacts (comma-separated, or 'none'):", ephemeral=True)
+    artifacts = [get_artifact_instance(v) for v in (await bot.wait_for("message", check=check, timeout=120)).content.split(",")]
 
-    await interaction.followup.send("Enter copy codes for each hero as a comma-separated list (lineup order).\n"
-                                  "Use GK for Giant Killer, DEF for Defier, 'none' if no copy.", ephemeral=True)
-    try:
-        copy_msg = await bot.wait_for("message", check=check_message, timeout=120)
-    except Exception:
-        await interaction.followup.send("Timed out waiting for copy selection. Defaulting to no copies.", ephemeral=True)
-        copy_codes = ["none"] * len(pending_teams[user_id]["expected"])
+    await interaction.followup.send("Enter copy codes for each hero (GK, DEF, GK DEF, or none):", ephemeral=True)
+    try: copy_msg = await bot.wait_for("message", check=check, timeout=120)
+    except: copy_msg = None
+    copy_codes = [x.upper() for x in copy_msg.content.split(",")] if copy_msg else ["none"] * 6
+
+    await interaction.followup.send("Select Core of Origin: PDE or none:", ephemeral=True)
+    try: core_msg = await bot.wait_for("message", check=check, timeout=60)
+    except: core_msg = None
+    global active_core
+    active_core = PDECore() if (core_msg and core_msg.content.lower() == "pde") else None
+
+    await interaction.followup.send("Choose fight mode: detailed or summary:", ephemeral=True)
+    try: mode_msg = await bot.wait_for("message", check=check, timeout=60)
+    except: mode = "detailed"
     else:
-        copy_codes = [code.strip().upper() for code in copy_msg.content.split(",") if code.strip()]
-    if len(copy_codes) != len(pending_teams[user_id]["expected"]):
-        await interaction.followup.send("Error: The number of copy entries must match the number of heroes selected.", ephemeral=True)
-        return
+        mode = mode_msg.content.lower()
+        if mode not in ["detailed", "summary"]: mode = "detailed"
 
-    await interaction.followup.send("Enter Core of Origin: 'PDE' or 'none':", ephemeral=True)
-    try:
-        core_msg = await bot.wait_for("message", check=check_message, timeout=60)
-    except Exception:
-        await interaction.followup.send("Timed out waiting for core selection. No core will be used.", ephemeral=True)
-        selected_core = "none"
-    else:
-        selected_core = core_msg.content.strip().lower()
-    if selected_core == "pde":
-        active_core = PDECore()
-    else:
-        active_core = None
-
-    await interaction.followup.send("Choose fight mode: 'detailed' or 'summary':", ephemeral=True)
-    try:
-        mode_msg = await bot.wait_for("message", check=check_message, timeout=60)
-    except Exception:
-        await interaction.followup.send("Timed out waiting for fight mode selection. Defaulting to detailed mode.", ephemeral=True)
-        mode = "detailed"
-    else:
-        mode = mode_msg.content.strip().lower()
-        if mode not in ["detailed", "summary"]:
-            await interaction.followup.send("Invalid input. Defaulting to detailed mode.", ephemeral=True)
-            mode = "detailed"
-
+    ids = pending_teams[user_id]["expected"]
     user_config = pending_teams[user_id]
-    hero_ids = user_config["expected"]
-    user_config["heroes"] = []
-    for i, hero_id in enumerate(hero_ids):
-        artifact_instance = get_artifact_instance(artifact_codes[i])
-        hero_instance = Hero.from_stats(hero_id, [hp_values[i], atk_values[i], spd_values[i]],
-                                        artifact=artifact_instance if artifact_instance is not None else None)
+    for i, hero_id in enumerate(ids):
+        hero = Hero.from_stats(hero_id, [hp[i], atk[i], spd[i]], artifact=artifacts[i])
         if hero_id in user_config["enables"]:
-            purify_opt, trait_opt = user_config["enables"][hero_id]
-            hero_instance.set_enables(purify_opt, trait_opt)
-        copy_entry = copy_codes[i]
-        if "GK" in copy_entry.upper():
-            hero_instance.gk = True
-        if "DEF" in copy_entry.upper():
-            hero_instance.defier = True
-        user_config["heroes"].append(hero_instance)
+            hero.set_enables(*user_config["enables"][hero_id])
+        if "GK" in copy_codes[i]: hero.gk = True
+        if "DEF" in copy_codes[i]: hero.defier = True
+        user_config["heroes"].append(hero)
 
-    front_line = user_config["heroes"][:2]
-    back_line = user_config["heroes"][2:]
-    team = Team(user_config["heroes"], front_line=front_line, back_line=back_line)
-    boss = Boss()
-    await interaction.followup.send("All heroes configured. Battle starting!", ephemeral=True)
+    front, back = user_config["heroes"][:2], user_config["heroes"][2:]
+    team, boss = Team(user_config["heroes"], front, back), Boss()
 
     from battle import simulate_battle
-    battle_logs = await simulate_battle(interaction, team, boss, mode)
-    if mode == "summary":
-        for log in battle_logs:
-            await interaction.followup.send(log)
+    logs = []
+    for hero in team.heroes:
+        if hasattr(hero, "start_of_battle"):
+            logs.extend(hero.start_of_battle(team, boss))
+    logs += await simulate_battle(interaction, team, boss, mode)
 
-    if not boss.is_alive():
-        await interaction.followup.send("Boss defeated!", ephemeral=True)
-    elif all(not h.is_alive() for h in team.heroes):
-        await interaction.followup.send("All heroes have fallen!", ephemeral=True)
-    else:
-        await interaction.followup.send("Battle ended after 15 rounds.", ephemeral=True)
-
+    for log in logs:
+        await interaction.followup.send(log)
     del pending_teams[user_id]
 
-@tree.command(name="debugbattle", description="Run a test battle with a pre-set team", guild=guild_id)
+@tree.command(name="debugbattle", description="Run a debug battle", guild=guild_id)
 async def debug_battle(interaction: discord.Interaction):
-    from game_logic import Hero, Boss, Team
-    from game_logic.artifacts import DB, Mirror, Antlers
-    from game_logic.cores import PDECore
+    from game_logic.artifacts import DB, Mirror, Scissors, Antlers
     from battle import simulate_battle
-
     global active_core
     active_core = PDECore()
 
-    hero_data = [
-    ("hero_MFF_Hero", 1.1e10, 1e9, 3100, "MP", "UW", DB()),        # Front
-    ("hero_SQH_Hero", 9e9, 1.2e9, 2950, "MP", "UW", Mirror()),       # Front
-    ("hero_DGN_Hero", 1e10, 1.1e9, 3050, "MP", "UW", Scissors()),    # Back
-    ("hero_LFA_Hero", 9.5e9, 1.65e9, 3000, "MP", "BS", Antlers()),    # Back
-    ("hero_PDE_Hero", 6e9, 9e8, 2900, "MP", "UW", Scissors()),        # Back
-    ("hero_LBRM_Hero", 6e9, 1e9, 2800, "MP", "UW", Mirror()),         # Back
-]
+    data = [
+        ("hero_SQH_Hero", 1e10, 1e9, 3000, "MP", "UW", DB()),
+        ("hero_MFF_Hero", 1e10, 1e9, 3000, "MP", "UW", DB()),
+        ("hero_DGN_Hero", 1e10, 1e9, 3000, "MP", "UW", Scissors()),
+        ("hero_LFA_Hero", 1e10, 1e9, 3000, "MP", "UW", Antlers()),
+        ("hero_PDE_Hero", 1e10, 1e9, 3000, "MP", "UW", Mirror()),
+        ("hero_LBRM_Hero", 1e10, 1e9, 3000, "MP", "UW", Mirror())
+    ]
 
     heroes = []
-    for hero_id, hp, atk, spd, purify, trait, artifact in hero_data:
-        hero = Hero.from_stats(hero_id, [hp, atk, spd], artifact=artifact)
-        hero.set_enables(purify, trait)
-        hero.gk = True
-        hero.defier = True
-        heroes.append(hero)
+    for hid, hp, atk, spd, purify, trait, artifact in data:
+        h = Hero.from_stats(hid, [hp, atk, spd], artifact=artifact)
+        h.set_enables(purify, trait)
+        h.gk = h.defier = True
+        heroes.append(h)
 
-    front_line = [heroes[0], heroes[2]]  # MFF and LFA
-    back_line = [heroes[1], heroes[3], heroes[4], heroes[5]]  # DGN, SQH, PDE, LBRM
-    team = Team(heroes, front_line, back_line)
+    team = Team(heroes, heroes[:2], heroes[2:])
     boss = Boss()
+    await interaction.response.send_message("🧪 Starting debug battle...", ephemeral=True)
 
-    await interaction.response.send_message("🧪 Starting debug battle with preset heroes...", ephemeral=True)
-    await simulate_battle(interaction, team, boss, "detailed")
+    logs = []
+    for hero in team.heroes:
+        if hasattr(hero, "start_of_battle"):
+            logs.extend(hero.start_of_battle(team, boss))
+    logs += await simulate_battle(interaction, team, boss, "detailed")
 
+    for log in logs:
+        await interaction.followup.send(log)
 
 @bot.event
 async def on_ready():

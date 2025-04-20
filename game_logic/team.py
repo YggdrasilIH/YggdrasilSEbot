@@ -68,7 +68,6 @@ class Team:
                 logs.append(f"⚡ Start-of-Round Energy: {', '.join(names)} (+{amount})")
         if curse_lines:
             logs.extend([str(l) for l in curse_lines if isinstance(l, str)])
-        logs = []
         if not boss.is_alive():
             return logs
         logs.append(f"⚔️ Team begins actions for Round {round_num}.")

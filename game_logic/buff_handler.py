@@ -1,5 +1,3 @@
-# game_logic/buff_handler.py
-
 class BuffHandler:
     ATTRIBUTE_BUFF_KEYS = {
         "atk", "armor", "speed", "skill_damage", "precision", "block",
@@ -7,19 +5,36 @@ class BuffHandler:
         "DR", "HD", "energy"
     }
 
-    ATTRIBUTE_REDUCTION_KEYS = {
-        "atk", "armor", "speed", "skill_damage", "precision", "block",
-        "crit_rate", "crit_dmg", "armor_break", "control_immunity",
-        "DR", "HD", "energy"
-    }
+    ATTRIBUTE_REDUCTION_KEYS = ATTRIBUTE_BUFF_KEYS.copy()
 
     @staticmethod
-    def is_attribute_buff(buff):
-        return buff.get("attribute") in BuffHandler.ATTRIBUTE_BUFF_KEYS
+    def is_attribute_buff(buff, strict=False):
+        attr = buff.get("attribute")
+        bonus = buff.get("bonus", 0)
+        name = buff.get("name", "")
+        if attr not in BuffHandler.ATTRIBUTE_BUFF_KEYS:
+            return False
+        if strict:
+            if isinstance(bonus, (int, float)) and bonus < 0:
+                return False
+            if name.startswith("replicated_") or name.endswith("_down"):
+                return False
+        return True
 
     @staticmethod
-    def is_attribute_reduction(debuff):
-        return debuff.get("attribute") in BuffHandler.ATTRIBUTE_REDUCTION_KEYS
+    def is_attribute_reduction(debuff, strict=False):
+        attr = debuff.get("attribute")
+        bonus = debuff.get("bonus", 0)
+        name = debuff.get("name", "")
+        if attr not in BuffHandler.ATTRIBUTE_REDUCTION_KEYS:
+            return False
+        if strict:
+            if isinstance(bonus, (int, float)) and bonus >= 0:
+                return False
+            if name.startswith("replicated_"):
+                return False
+        return True
+
 
     @staticmethod
     def apply_buff(hero, buff_name, buff_data, boss=None):

@@ -51,6 +51,8 @@ class Hero:
         self.immune_control_effect = random.choice(["fear", "silence", "seal_of_light"])
         self.gk = False
         self.defier = False
+        self.purify_enable = purify_enable
+        self.trait_enable = trait_enable
 
     def set_enables(self, purify, trait):
         self.purify_enable = purify
@@ -137,12 +139,13 @@ class Hero:
     def apply_bleed(self, boss):
         if self.bleed_duration > 0 and self.bleed > 0:
             bleed_damage = self.bleed
-            boss.take_damage(bleed_damage)
+            logs = boss.take_damage(bleed_damage, source_hero=self)
             self.bleed_duration -= 1
             label = f"🩸 {self.name} → {boss.name}: {bleed_damage / 1e6:.0f}M Bleed"
-            return label
-        return None
-
+            if isinstance(logs, list):
+                return logs + [label]
+            return [label]
+        return []
 
     def end_of_round(self, boss, team, round_num):
         messages = []
@@ -165,6 +168,12 @@ class Hero:
             if artifact_logs:
                 messages.extend(artifact_logs)
 
+        # ✅ Purify Enable (Control, Attribute Reduction, Mark)
+        if self.purify_enable and hasattr(self.purify_enable, "apply_end_of_round"):
+            purify_result = self.purify_enable.apply_end_of_round(self, boss)
+            if purify_result:
+                messages.append(purify_result)
+
         messages.append(f"📉 {self.get_status_description()}")
         return messages
 
@@ -175,7 +184,7 @@ class Hero:
 
     def apply_attribute_buff_with_curse(self, attribute, buff_value, boss):
         messages = []
-        if self.curse_of_decay > 0:
+        if BuffHandler.is_attribute_buff({"attribute": attribute, "bonus": buff_value}) and self.curse_of_decay > 0:
             damage = int(boss.atk * 30)
             self.hp -= damage
             self.hp = max(self.hp, 0)

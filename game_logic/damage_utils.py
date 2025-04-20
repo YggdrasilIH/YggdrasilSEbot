@@ -5,18 +5,19 @@ from utils.log_utils import stylize_log
 import random
 from math import floor
 
-def hero_deal_damage(source, target, base_damage, is_active, team):
+def hero_deal_damage(source, target, base_damage, is_active, team, allow_counter=True, allow_crit=True):
     logs = []
     if not target.is_alive():
         return logs
 
-    crit = random.random() < (source.crit_rate / 100)
+    crit = False if not allow_crit else random.random() < (source.crit_rate / 100)
     crit_dmg = min(source.crit_dmg, 150)
     precision = min(source.precision, 150)
 
     damage = base_damage
     if crit:
-        damage *= (crit_dmg / 100)
+        # Critical hits do 2x base damage + 1% extra per 1% over 100% crit damage
+        damage *= 2 + ((crit_dmg - 100) / 100)
 
     damage *= (1 + source.hd * 0.007)
     damage *= (1 + precision * 0.003)
@@ -88,56 +89,27 @@ def hero_deal_damage(source, target, base_damage, is_active, team):
     # Deal final damage
     damage = max(0, int(damage))
     if hasattr(target, "take_damage"):
-        target.take_damage(damage, source, team)
+        extra_logs = target.take_damage(damage, source, team)
+        if isinstance(extra_logs, list):
+            logs.extend(extra_logs)
     else:
         target.hp -= damage
     logs.append(stylize_log("damage", f"{source.name} deals {damage} damage to {target.name} ({'CRIT' if crit else 'Normal'} hit)."))
 
+    # Trigger after-attack effects
+    if hasattr(source, "after_attack"):
+        extra_logs = source.after_attack(source, target, "active" if is_active else "basic", team)
+        if isinstance(extra_logs, list):
+            logs.extend(extra_logs)
+
+    # Trigger on-receive-damage reactions
+    if hasattr(target, "on_receive_damage"):
+        extra_logs = target.on_receive_damage(damage, team, source)
+        if isinstance(extra_logs, list):
+            logs.extend(extra_logs)
+
     # Boss counterattack (only if target is boss and is_active/basic)
-    if hasattr(target, "counterattack") and is_active:
+    if allow_counter and hasattr(target, "counterattack") and is_active:
         logs.extend(target.counterattack(team.heroes))
 
-    return logs
-
-def calculate_final_damage(source, base_damage, is_crit):
-    crit_dmg = min(source.crit_dmg, 150)
-    precision = min(source.precision, 150)
-
-    if is_crit:
-        base_damage *= (crit_dmg / 100)
-
-    base_damage *= (1 + source.hd * 0.007)
-    base_damage *= (1 + precision * 0.003)
-    base_damage *= (1 + source.all_damage_dealt / 100)
-
-    return int(base_damage)
-
-def apply_direct_damage(source, target, amount, team=None, ignore_shield=False, ignore_reduction=False):
-    logs = []
-    damage = amount
-
-    if not ignore_reduction:
-        dr = min(getattr(target, "dr", 0), 0.75)
-        if dr > 0:
-            logs.append(stylize_log("debuff", f"{target.name} reduces damage by {int(dr * 100)}% DR."))
-        damage *= (1 - dr)
-
-        adr = min(getattr(target, "adr", 0), 0.75)
-        if adr > 0:
-            logs.append(stylize_log("debuff", f"{target.name} reduces damage by {int(adr * 100)}% ADR."))
-        damage *= (1 - adr)
-
-    if not ignore_shield and target.shield > 0:
-        if target.shield >= damage:
-            target.shield -= damage
-            logs.append(stylize_log("shield", f"{target.name}'s shield absorbs {int(damage)} damage."))
-            damage = 0
-        else:
-            logs.append(stylize_log("shield", f"{target.name}'s shield absorbs {int(target.shield)} damage."))
-            damage -= target.shield
-            target.shield = 0
-
-    damage = max(0, int(damage))
-    target.hp -= damage
-    logs.append(stylize_log("damage", f"{source.name} directly deals {damage} damage to {target.name}."))
     return logs
