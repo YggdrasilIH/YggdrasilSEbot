@@ -6,9 +6,9 @@ from game_logic.control_effects import clear_control_effect
 
 class PDE(Hero):
     def __init__(self, name, hp, atk, armor, spd, crit_rate, crit_dmg, ctrl_immunity, hd, precision,
-                 purify_enable=None, trait_enable=None, artifact=None):
+                 purify_enable=None, trait_enable=None, artifact=None, lifestar=None):
         super().__init__(name, hp, atk, armor, spd, crit_rate, crit_dmg, ctrl_immunity, hd, precision,
-                         purify_enable, trait_enable, artifact)
+                         purify_enable, trait_enable, artifact, lifestar=lifestar)
         self.transition_power = 0
         self.energy = 0
         self.triggered_this_round = False

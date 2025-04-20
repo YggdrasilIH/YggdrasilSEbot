@@ -3,6 +3,13 @@ from game_logic.heroes.mff import MFF  # Central foresight handler
 from game_logic.buff_handler import grant_energy  # Central energy handling
 
 class Team:
+    def get_line(self, hero):
+        """Return all allies in the same line (front_line or back_line) as the given hero."""
+        if hero in self.front_line:
+            return self.front_line
+        elif hero in self.back_line:
+            return self.back_line
+        return []
     def trigger_mff_passive(self, attacker, boss):
         logs = []
         if attacker.has_fear or attacker.has_silence:
@@ -80,6 +87,8 @@ class Team:
                     if add_targets:
                         logs.append(f"✨ All Damage Dealt +3%: {', '.join(add_targets)} (from {hero.name}'s active skill)")
                     logs.extend(skill_logs)
+                    if hero.lifestar and hasattr(hero.lifestar, "on_after_action"):
+                        logs.extend(hero.lifestar.on_after_action(hero, self))
                     if hero.artifact and hasattr(hero.artifact, "on_active_skill"):
                         logs.extend(hero.artifact.on_active_skill(self, boss))
                     logs.extend(self.trigger_mff_passive(hero, boss))
@@ -92,6 +101,8 @@ class Team:
                     logs.append(f"🔪 {hero.name} uses basic attack.")
                     skill_logs = hero.basic_attack(boss, self)
                     logs.extend(skill_logs)
+                    if hero.lifestar and hasattr(hero.lifestar, "on_after_action"):
+                        logs.extend(hero.lifestar.on_after_action(hero, self))
                     logs.extend(self.trigger_mff_passive(hero, boss))
                     logs.extend(apply_foresight(hero, "basic"))
                     logs.append(grant_energy(hero, 50))

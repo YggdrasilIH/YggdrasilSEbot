@@ -107,6 +107,18 @@ def hero_deal_damage(source, target, base_damage, is_active, team, allow_counter
         if isinstance(extra_logs, list):
             logs.extend(extra_logs)
 
+    # Trigger lifestar on_ally_hit for teammates
+    for ally in team.heroes:
+        if (
+            ally != target and ally.is_alive() and
+            hasattr(ally, "lifestar") and
+            hasattr(ally.lifestar, "on_ally_hit") and
+            hasattr(target, "has_seal_of_light")  # Ensure target is a hero
+        ):
+            extra_logs = ally.lifestar.on_ally_hit(target, team, "active" if is_active else "basic")
+            if isinstance(extra_logs, list):
+                logs.extend(extra_logs)
+
     # Trigger on-receive-damage reactions
     if hasattr(target, "on_receive_damage"):
         extra_logs = target.on_receive_damage(damage, team, source)

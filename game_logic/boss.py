@@ -111,7 +111,15 @@ class Boss:
 
         if fear_count:
             bonus = fear_count * 50
-            BuffHandler.apply_buff(self, "fear_buff", {"attribute": "HD", "bonus": bonus, "rounds": 15})
+            BuffHandler.apply_buff(self, "fear_buff", {
+                "attribute": "HD", "bonus": bonus, "rounds": 15
+            })
+            self.attribute_effects.append({
+                "attribute": "HD",
+                "value": bonus,
+                "rounds": 15,
+                "name": "HD buff (Fear)"
+            })
             buffs.append(f"+{bonus} HD (Fear)")
         if silence_count:
             energy_gain = silence_count * 50
@@ -168,6 +176,12 @@ class Boss:
         bonus = int(self.atk * 0.15)
         BuffHandler.apply_buff(self, "end_of_round_atk_buff", {
             "attribute": "atk", "bonus": bonus, "rounds": 9999
+        })
+        self.attribute_effects.append({
+            "attribute": "atk",
+            "value": bonus,
+            "rounds": 9999,
+            "name": "ATK buff"
         })
         logs.append(f"📈 Boss +{bonus} ATK")
 

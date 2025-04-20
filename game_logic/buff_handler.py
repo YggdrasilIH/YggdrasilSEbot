@@ -2,7 +2,7 @@ class BuffHandler:
     ATTRIBUTE_BUFF_KEYS = {
         "atk", "armor", "speed", "skill_damage", "precision", "block",
         "crit_rate", "crit_dmg", "armor_break", "control_immunity",
-        "DR", "HD", "energy"
+        "dr", "hd", "energy"
     }
 
     ATTRIBUTE_REDUCTION_KEYS = ATTRIBUTE_BUFF_KEYS.copy()

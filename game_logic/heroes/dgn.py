@@ -5,9 +5,9 @@ import random
 
 class DGN(Hero):
     def __init__(self, name, hp, atk, armor, spd, crit_rate, crit_dmg, ctrl_immunity, hd, precision,
-                 purify_enable=None, trait_enable=None, artifact=None):
+                 purify_enable=None, trait_enable=None, artifact=None, lifestar=None):
         super().__init__(name, hp, atk, armor, spd, crit_rate, crit_dmg, ctrl_immunity, hd, precision,
-                         purify_enable, trait_enable, artifact)
+                         purify_enable, trait_enable, artifact, lifestar=lifestar)
         self.undying_shadow = False
         self.bright_blessing = False
         self.transition_power = 0
