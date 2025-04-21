@@ -264,26 +264,28 @@ class Hero:
         from .dgn import DGN
         hp, atk, spd = stats
         if hero_id == "hero_SQH_Hero":
-            return SQH("SQH", hp, atk, armor=4000, spd=spd, crit_rate=10, crit_dmg=150,
+            hero = SQH("SQH", hp, atk, armor=4000, spd=spd, crit_rate=10, crit_dmg=150,
                        ctrl_immunity=70, hd=0, precision=100, artifact=artifact, lifestar=lifestar)
         elif hero_id == "hero_LFA_Hero":
-            return LFA("LFA", hp, atk, armor=1200, spd=spd, crit_rate=20, crit_dmg=150,
+            hero = LFA("LFA", hp, atk, armor=1200, spd=spd, crit_rate=20, crit_dmg=150,
                        ctrl_immunity=70, hd=150, precision=150, artifact=artifact, lifestar=lifestar)
         elif hero_id == "hero_MFF_Hero":
-            return MFF("MFF", hp, atk, armor=4000, spd=spd, crit_rate=8, crit_dmg=150,
+            hero = MFF("MFF", hp, atk, armor=4000, spd=spd, crit_rate=8, crit_dmg=150,
                        ctrl_immunity=100, hd=0, precision=100, artifact=artifact, lifestar=lifestar)
         elif hero_id == "hero_ELY_Hero":
-            return ELY("ELY", hp, atk, armor=5000, spd=spd, crit_rate=9, crit_dmg=150,
+            hero = ELY("ELY", hp, atk, armor=5000, spd=spd, crit_rate=9, crit_dmg=150,
                        ctrl_immunity=80, hd=0, precision=100, artifact=artifact, lifestar=lifestar)
         elif hero_id == "hero_PDE_Hero":
-            return PDE("PDE", hp, atk, armor=4000, spd=spd, crit_rate=11, crit_dmg=150,
+            hero = PDE("PDE", hp, atk, armor=4000, spd=spd, crit_rate=11, crit_dmg=150,
                        ctrl_immunity=105, hd=0, precision=100, artifact=artifact, lifestar=lifestar)
         elif hero_id == "hero_LBRM_Hero":
-            return LBRM("LBRM", hp, atk, armor=4000, spd=spd, crit_rate=10, crit_dmg=145,
+            hero = LBRM("LBRM", hp, atk, armor=4000, spd=spd, crit_rate=10, crit_dmg=145,
                         ctrl_immunity=110, hd=0, precision=100, artifact=artifact, lifestar=lifestar)
         elif hero_id == "hero_DGN_Hero":
-            return DGN("DGN", hp, atk, armor=4000, spd=spd, crit_rate=10, crit_dmg=150,
+            hero = DGN("DGN", hp, atk, armor=4000, spd=spd, crit_rate=10, crit_dmg=150,
                        ctrl_immunity=80, hd=0, precision=100, artifact=artifact, lifestar=lifestar)
         else:
-            return cls("Default", hp, atk, armor=1000, spd=spd, crit_rate=10, crit_dmg=150,
+            hero = cls("Default", hp, atk, armor=1000, spd=spd, crit_rate=10, crit_dmg=150,
                        ctrl_immunity=100, hd=0, precision=100, artifact=artifact, lifestar=lifestar)
+        hero.energy = 50
+        return hero

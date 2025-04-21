@@ -27,7 +27,7 @@ class LFA(Hero):
             second_total = 0
             for i in range(2):
                 dmg = self.atk * 12
-                logs.append(f"🗡️ {self.name} deals {dmg // 1_000_000}M base damage (extra hit {i+1}/2).")
+                logs.append(f"🗈️ {self.name} deals {dmg // 1_000_000}M base damage (extra hit {i+1}/2).")
                 logs.extend(hero_deal_damage(self, boss, dmg, is_active=True, team=team, allow_counter=False, allow_crit=True))
                 second_total += dmg
                 total_damage += dmg
@@ -36,12 +36,12 @@ class LFA(Hero):
             logs.append(f"❤️ {self.name} heals for {heal_amt // 1_000_000}M HP from extra attacks.")
 
         dmg = self.atk * 12
-        logs.extend(hero_deal_damage(self, boss, dmg, is_active=True, team=team, allow_counter=False, allow_crit=True))
+        logs.extend(hero_deal_damage(self, boss, dmg, is_active=True, team=team, allow_counter=False, allow_crit=False))
         total_damage += dmg
 
         bonus_damage = int(total_damage * 1.20)
         logs.append(f"💣 {self.name} unleashes {bonus_damage // 1_000_000}M bonus burst damage.")
-        logs.extend(hero_deal_damage(self, boss, bonus_damage, is_active=True, team=team, allow_counter=False, allow_crit=False))
+        logs.extend(hero_deal_damage(self, boss, bonus_damage, is_active=True, team=team, allow_counter=False, allow_crit=True))
 
         self.transition_power += 6
         logs.append(f"{self.name} gains 6 layers of Transition Power (TP now: {self.transition_power}).")
@@ -90,7 +90,7 @@ class LFA(Hero):
             if boss.hp >= 0.50 * boss.max_hp:
                 bonus_dmg = self.atk * 12
                 total_damage += bonus_dmg
-                logs.append(f"💢 {self.name} deals +1200% bonus damage because Boss HP ≥ 50%.")
+                logs.append(f"💫 {self.name} deals +1200% bonus damage because Boss HP ≥ 50%.")
 
             logs.extend(hero_deal_damage(self, boss, total_damage, is_active=True, team=team, allow_counter=False, allow_crit=False))
 

@@ -1,3 +1,4 @@
+
 # game_logic/damage_utils.py
 
 from game_logic.buff_handler import BuffHandler
@@ -19,6 +20,13 @@ def hero_deal_damage(source, target, base_damage, is_active, team, allow_counter
         # Critical hits do 2x base damage + 1% extra per 1% over 100% crit damage
         damage *= 2 + ((crit_dmg - 100) / 100)
 
+    # Stack HD, Precision, All Damage Dealt (Phase 1)
+    damage *= (1 + source.hd * 0.007)
+    damage *= (1 + precision * 0.003)
+    damage *= (1 + source.all_damage_dealt / 100)
+
+    # Phase 2 multipliers: GK, Defier
+
     damage *= (1 + source.hd * 0.007)
     damage *= (1 + precision * 0.003)
     damage *= (1 + source.all_damage_dealt / 100)
@@ -34,15 +42,7 @@ def hero_deal_damage(source, target, base_damage, is_active, team, allow_counter
         logs.append(f"🟢 {source.name} deals +{poison_extra // 1_000_000}M bonus poison damage to {target.name} (EF3 bonus).")
 
     # Balanced Strike (Enable)
-    if hasattr(source, "trait_enable") and hasattr(source.trait_enable, "apply_crit_bonus"):
-        heal_amt, extra_dmg = source.trait_enable.apply_crit_bonus(int(damage), crit)
-        damage += extra_dmg
-        source.hp = min(source.max_hp, source.hp + heal_amt)
-        if heal_amt:
-            logs.append(f"❤️ {source.name} heals {heal_amt // 1_000_000}M HP from Balanced Strike.")
-        if extra_dmg:
-            logs.append(f"🟢 {source.name} deals +{extra_dmg // 1_000_000}M bonus damage from Balanced Strike.")
-
+    # Moved post-damage, handled below
     # Giant Killer (GK)
     if getattr(source, "gk", False) and source.hp > 0:
         ratio = target.hp / source.hp
@@ -53,6 +53,9 @@ def hero_deal_damage(source, target, base_damage, is_active, team, allow_counter
             logs.append(f"🟢 {source.name} deals +{int(bonus_multiplier * 100)}% damage from Giant Killer.")
 
     # Defier (DEF)
+    if getattr(source, "defier", False) and target.hp >= 0.70 * target.max_hp:
+        damage *= 1.30
+        logs.append(f"🟢 {source.name} deals +30% damage from Defier.")
     if getattr(source, "defier", False) and target.hp >= 0.70 * target.max_hp:
         damage *= 1.30
         logs.append(f"🟢 {source.name} deals +30% damage from Defier.")
@@ -97,9 +100,31 @@ def hero_deal_damage(source, target, base_damage, is_active, team, allow_counter
             logs.extend(extra_logs)
     else:
         target.hp -= damage
-        
+
     if isinstance(damage, int) and damage > 0:
         logs.append(f"🟢 {source.name} deals {damage // 1_000_000}M damage to {target.name} ({'CRIT' if crit else 'Normal'} hit).")
+
+    # Balanced Strike follow-up (moved post-damage)
+    if hasattr(source, "trait_enable") and hasattr(source.trait_enable, "apply_crit_bonus"):
+        # Use raw pre-reduction damage for BS bonus/heal
+        raw_for_bs = base_damage
+        raw_for_bs *= (1 + source.hd * 0.007)
+        raw_for_bs *= (1 + precision * 0.003)
+        raw_for_bs *= (1 + source.all_damage_dealt / 100)
+        if crit:
+            raw_for_bs *= 2 + ((crit_dmg - 100) / 100)
+
+        heal_amt, extra_dmg = source.trait_enable.apply_crit_bonus(int(raw_for_bs), crit)
+        if heal_amt > 0:
+            source.hp = min(source.max_hp, source.hp + heal_amt)
+            logs.append(f"❤️ {source.name} heals {heal_amt // 1_000_000}M HP from Balanced Strike.")
+            if hasattr(target, "take_damage"):
+                bonus_logs = target.take_damage(extra_dmg, source, team)
+                if isinstance(bonus_logs, list):
+                    logs.extend(bonus_logs)
+            else:
+                target.hp -= extra_dmg
+            logs.append(f"🟢 {source.name} deals {extra_dmg // 1_000_000}M bonus damage from Balanced Strike.")
 
     # Trigger after-attack effects
     if hasattr(source, "after_attack"):

@@ -72,6 +72,7 @@ async def debug_battle(interaction: discord.Interaction):
     boss = Boss()
     logs = []
     for hero in team.heroes:
+        print(f"[DEBUG] {hero.name} energy before start_of_battle: {hero.energy}")
         if hasattr(hero, "start_of_battle"):
             logs.extend(hero.start_of_battle(team, boss))
 
@@ -83,7 +84,7 @@ async def debug_battle(interaction: discord.Interaction):
 
     verdict = "✅ Boss defeated!" if not boss.is_alive() else ("❌ All heroes have fallen!" if all(not h.is_alive() for h in team.heroes) else "⚔️ Battle ended after 15 rounds.")
     logs.append(verdict)
-    chunks = ["".join(logs[i:i+20]) for i in range(0, len(logs), 20)]
+    chunks = ["".join(str(entry) for entry in logs[i:i+20]) for i in range(0, len(logs), 20)]
     await interaction.response.send_message(chunks[0], ephemeral=True)
     for chunk in chunks[1:]:
         await interaction.followup.send(chunk, ephemeral=True)
@@ -127,10 +128,10 @@ async def debug_quick(interaction: discord.Interaction):
     verdict = "✅ Boss defeated!" if not boss.is_alive() else ("❌ All heroes have fallen!" if all(not h.is_alive() for h in team.heroes) else "⚔️ Battle ended after 15 rounds.")
     lines = [f"{verdict}", f"🏹 Total Damage: {boss.total_damage_taken / 1e9:.2f}B"]
     hero_stats = [(h.name, getattr(h, "total_damage_dealt", 0)) for h in team.heroes]
-    top_name = top_dmg_hero.name
+    top_name = str(top_dmg_hero.name)
     for name, dmg in hero_stats:
         label = f"**{name}**" if name == top_name else name
-        lines.append(f"{label}: {dmg / 1e9:.2f}B damage")
+        lines.append(str(f"{label}: {dmg / 1e9:.2f}B damage"))
     await interaction.response.send_message("".join(lines), ephemeral=True)
 
 

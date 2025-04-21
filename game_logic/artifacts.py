@@ -36,6 +36,9 @@ class Scissors(Artifact):
         return replicated_msgs
 
 class DB(Artifact):
+    def apply_start_of_battle(self, team, round_num):
+        self.owner.energy += 50
+        return [stylize_log("energy", f"🔶 {self.owner.name} gains +50 energy from Demon Bell at battle start.")]
     def bind_team(self, team):
         self.team = team
     def __init__(self):
@@ -85,8 +88,10 @@ class Mirror(Artifact):
     def apply_start_of_battle(self, team, round_num):
         self.last_trigger_round = round_num
         self.bonus = 4.5
-        for hero in team.heroes:
-            hero.all_damage_dealt += self.bonus
+        self.owner.energy += 50
+        msg = stylize_log("energy", f"🔶 {self.owner.name} gains +50 energy from Mirror at battle start.")
+        self.owner.all_damage_dealt += self.bonus
+        return [msg]
 
     def apply_end_of_round(self, hero, team, boss, round_num):
         msgs = []

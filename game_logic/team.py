@@ -141,7 +141,11 @@ class Team:
         logs.append(f"🖚 End of Round {round_num} effects begin.")
         for hero in self.heroes:
             if hero.is_alive():
-                hero_logs = hero.end_of_round(boss, self, round_num)
+                hero_logs = []
+                if hasattr(hero, "end_of_round"):
+                    hero_logs += hero.end_of_round(boss, self, round_num)
+                if hasattr(hero, "lifestar") and hero.lifestar and hasattr(hero.lifestar, "end_of_round"):
+                    hero_logs += hero.lifestar.end_of_round(hero, self, boss, round_num)
                 scissors_logs = [entry for entry in hero_logs if "Scissors" in entry]
                 non_scissors_logs = [entry for entry in hero_logs if entry not in scissors_logs]
                 if hero.artifact and any("Mirror" in str(type(hero.artifact)) for _ in [0]):
