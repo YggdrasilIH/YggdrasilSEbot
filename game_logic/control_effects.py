@@ -12,8 +12,8 @@ def apply_control_effect(hero, effect_name: str, rounds: int, boss=None, team=No
         message = f"⚠️ {hero.name} is afflicted with {effect_name.replace('_', ' ').capitalize()} for {rounds} rounds."
         logs.append(message)
 
-        if boss and team:
-            logs.extend(boss.process_control_buffs(team.heroes))
+        if boss:
+            logs.extend(boss.on_hero_controlled(hero, effect_name))
 
         # Teamwide reaction (e.g. LBRM energy-based cleanse)
         if hasattr(hero, "team"):
@@ -32,8 +32,8 @@ def apply_control_effect(hero, effect_name: str, rounds: int, boss=None, team=No
         return "\n".join(logs)
     else:
         return f"🛡️ {hero.name} is immune to {effect_name.replace('_', ' ').capitalize()}."
-    
-    
+
+
 def clear_control_effect(hero, effect_name: str):
     setattr(hero, f"has_{effect_name}", False)
     setattr(hero, f"{effect_name}_rounds", 0)

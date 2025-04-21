@@ -46,6 +46,29 @@ class Boss:
                 self.all_damage_bonus -= buff["all_damage_bonus"]
             del self.buffs[buff_name]
 
+    def on_hero_controlled(self, hero, effect):
+        logs = []
+        if effect == "fear":
+            BuffHandler.apply_buff(self, "fear_buff", {
+                "attribute": "HD", "bonus": 50, "rounds": 15
+            })
+            self.attribute_effects.append({
+                "attribute": "HD",
+                "value": 50,
+                "rounds": 15,
+                "name": "HD buff (Fear)"
+            })
+            logs.append("✨ Boss gains +50 HD from fear.")
+        elif effect == "seal_of_light":
+            BuffHandler.apply_buff(self, "seal_buff", {
+                "attribute": "all_damage_bonus", "bonus": 15, "rounds": 15
+            })
+            logs.append("✨ Boss gains +15% all damage from Seal of Light.")
+        elif effect == "silence":
+            self.energy += 50
+            logs.append("✨ Boss gains +50 energy from silence.")
+        return logs
+
     def take_damage(self, dmg, source_hero=None, team=None):
         logs = []
         multiplier = 1.0
@@ -185,7 +208,21 @@ class Boss:
         })
         logs.append(f"📈 Boss +{bonus} ATK")
 
-        logs.extend(self.process_control_buffs(heroes))
+        # Remove 1 attribute buff from highest ATK hero if they have Calamity
+        if alive_heroes:
+            highest_atk = max(alive_heroes, key=lambda h: h.atk)
+            if highest_atk.calamity > 0:
+                attr_buffs = [k for k, v in highest_atk.buffs.items() if isinstance(v, dict) and v.get("attribute") in BuffHandler.ATTRIBUTE_BUFF_KEYS]
+                if attr_buffs:
+                    to_remove = random.choice(attr_buffs)
+                    del highest_atk.buffs[to_remove]
+                    logs.append(f"🧹 {highest_atk.name} loses attribute buff '{to_remove}' due to Calamity.")
+
+        # Add 1 Calamity to all heroes without Calamity
+        for hero in alive_heroes:
+            if hero.calamity < 1:
+                add_calamity(hero, 1, logs, boss=self)
+
         self.process_buffs()
         return logs
 
