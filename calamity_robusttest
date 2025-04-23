@@ -1,0 +1,104 @@
+import random
+from collections import defaultdict
+from game_logic.heroes.sqh import SQH
+from game_logic.heroes.lfa import LFA
+from game_logic.heroes.dgn import DGN
+from game_logic.heroes.pde import PDE
+from game_logic.heroes.lbrm import LBRM
+from game_logic.heroes.mff import MFF
+
+class DummyHero(MFF):
+    def active_skill(self, boss, team):
+        return []
+
+    def basic_attack(self, boss, team):
+        return []
+
+    def end_of_round(self, boss, team, round_num):
+        return []
+from game_logic.artifacts import DB, Mirror
+from game_logic.team import Team
+from game_logic.boss import Boss
+from game_logic.cores import active_core, PDECore
+
+CONTROL_EFFECTS = ["fear", "silence", "seal_of_light"]
+NUM_SIMULATIONS = 1000
+ROUNDS_PER_BATTLE = 15
+
+active_core = PDECore()
+
+HERO_CONFIGS = [
+    {"cls": MFF, "name": "MFF", "spd": 600, "artifact": None},
+    {"cls": DummyHero, "name": "Dummy1", "spd": 500, "artifact": None},
+    {"cls": DummyHero, "name": "Dummy2", "spd": 400, "artifact": None},
+    {"cls": DummyHero, "name": "Dummy3", "spd": 300, "artifact": None},
+    {"cls": DummyHero, "name": "Dummy4", "spd": 200, "artifact": None},
+    {"cls": DummyHero, "name": "Dummy5", "spd": 100, "artifact": None},
+]
+
+def simulate_mff_calamity_check():
+    stats = defaultdict(lambda: defaultdict(lambda: {
+        "active": 0, "basic": 0, "disabled": 0
+    }))
+    mff_triggered_pre_action = defaultdict(int)
+
+    for _ in range(NUM_SIMULATIONS):
+        heroes = []
+        for cfg in HERO_CONFIGS:
+            h = cfg["cls"](
+                cfg["name"], 1_000_000_000, 1_000_000, 0,
+                cfg["spd"], 0, 0, 0, 0, 0,
+                artifact=cfg["artifact"]
+            )
+            h.calamity = 0
+            heroes.append(h)
+
+        team = Team(heroes, front_line=[heroes[0], heroes[1]], back_line=heroes[2:])
+        boss = Boss()
+
+        for round_num in range(1, ROUNDS_PER_BATTLE + 1):
+
+            for hero in heroes:
+                hero.energy += 50
+
+            for hero in sorted(heroes, key=lambda h: h.spd, reverse=True):
+                hname = hero.name
+                r = stats[hname][round_num]
+
+                if hname == "MFF" and getattr(hero, "calamity", 0) >= 5:
+                    mff_triggered_pre_action[round_num] += 1
+
+                # capture control state BEFORE acting
+                pre_fear = getattr(hero, "has_fear", False)
+                pre_silence = getattr(hero, "has_silence", False)
+
+                can_active = not pre_silence and hero.energy >= 100
+                can_basic = not pre_fear and hero.energy < 100
+
+                if not can_active and not can_basic:
+                    r["disabled"] += 1
+                elif can_active:
+                    r["active"] += 1
+                    hero.active_skill(boss, team)
+                    hero.energy = 0
+                else:
+                    r["basic"] += 1
+                    hero.basic_attack(boss, team)
+                    hero.energy += 50
+
+            team.end_of_round(boss, round_num)
+
+    print("\n=== MFF Action Summary ===")
+    print("Hero\tRound\tTotal Active\tTotal Basic\tTotal Disabled\t% Disabled")
+    for round_num in range(1, ROUNDS_PER_BATTLE + 1):
+        r = stats["MFF"][round_num]
+        total = r["active"] + r["basic"] + r["disabled"]
+        pct_disabled = (r["disabled"] / total) * 100 if total else 0
+        print(f"MFF\t{round_num}\t{r['active']}\t{r['basic']}\t{r['disabled']}\t{pct_disabled:.1f}%")
+
+    print("\n=== MFF Calamity >= 5 Before Action ===")
+    for round_num in range(1, ROUNDS_PER_BATTLE + 1):
+        print(f"Round {round_num}: {mff_triggered_pre_action[round_num]} times")
+
+if __name__ == "__main__":
+    simulate_mff_calamity_check()

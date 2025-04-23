@@ -45,6 +45,51 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 tree = bot.tree
 guild_id = discord.Object(id=1358992627424428176)
 
+@tree.command(name="debugcontroltest", description="Run a control-focused battle with MFF", guild=guild_id)
+async def debug_control_test(interaction: discord.Interaction):
+    global active_core
+    active_core = PDECore()
+
+    data = [
+        ("hero_MFF_Hero", 11e9, 60e6, 3800, "MP", "UW", DB()),
+        ("hero_SQH_Hero", 12e9, 70e6, 3400, "MP", "UW", DB()),
+        ("hero_LFA_Hero", 20e9, 160e6, 3500, "MP", "BS", Antlers()),
+        ("hero_DGN_Hero", 14e9, 90e6, 3300, "MP", "UW", Scissors()),
+        ("hero_PDE_Hero", 9e9, 60e6, 2300, "MP", "UW", Mirror()),
+        ("hero_LBRM_Hero", 9.9e9, 50e6, 2000, "MP", "UW", Mirror())
+    ]
+
+    heroes = []
+    for hid, hp, atk, spd, purify, trait, artifact in data:
+        h = Hero.from_stats(hid, [hp, atk, spd], artifact=artifact)
+        h.set_enables(purify, trait)
+        h.gk = h.defier = True
+        h.total_damage_dealt = 0
+        heroes.append(h)
+
+    team = Team(heroes, heroes[:2], heroes[2:])
+    boss = Boss()
+    logs = []
+    for hero in team.heroes:
+        if hasattr(hero, "start_of_battle"):
+            logs.extend(hero.start_of_battle(team, boss))
+
+    for round_num in range(1, 16):
+        if not heroes[0].is_alive() or not boss.is_alive():
+            break
+        logs.append(f"🌀 ROUND {round_num}")
+        # Removed control status logs for clarity
+        for log in team.perform_turn(boss, round_num):
+            if "DGN" in log:
+                logs.append(log)
+
+    verdict = "✅ Boss defeated!" if not boss.is_alive() else ("❌ All heroes have fallen!" if not heroes[0].is_alive() else "⚔️ Battle ended after 15 rounds.")
+    logs.append(verdict)
+    chunks = ["".join(str(entry) for entry in logs[i:i+20]) for i in range(0, len(logs), 20)]
+    await interaction.response.send_message(chunks[0], ephemeral=True)
+    for chunk in chunks[1:]:
+        await interaction.followup.send(chunk, ephemeral=True)
+        
 @tree.command(name="debugbattle", description="Run full battle with logs", guild=guild_id)
 async def debug_battle(interaction: discord.Interaction):
     global active_core
@@ -97,7 +142,7 @@ async def debug_quick(interaction: discord.Interaction):
     data = [
         ("hero_MFF_Hero", 11e9, 60e6, 3800, "MP", "UW", DB()),
         ("hero_SQH_Hero", 12e9, 70e6, 3400, "MP", "UW", DB()),
-        ("hero_LFA_Hero", 20e9, 16e7, 3540, "CP", "BS", Antlers()),
+        ("hero_LFA_Hero", 20e9, 16e7, 3540, "MP", "UW", Antlers()),
         ("hero_DGN_Hero", 14e9, 90e6, 3300, "MP", "UW", Scissors()),
         ("hero_PDE_Hero", 9e9, 60e6, 2300, "MP", "UW", Mirror()),
         ("hero_LBRM_Hero", 9.9e9, 50e6, 2000, "MP", "UW", Mirror())
@@ -143,7 +188,7 @@ async def debug_fast(interaction: discord.Interaction):
     data = [
         ("hero_MFF_Hero", 11e9, 60e6, 3800, "MP", "UW", DB()),
         ("hero_SQH_Hero", 12e9, 70e6, 3400, "MP", "UW", DB()),
-        ("hero_LFA_Hero", 20e9, 160e6, 3500, "MP", "BS", Antlers()),
+        ("hero_LFA_Hero", 20e9, 100e6, 3500, "MP", "BS", Antlers()),
         ("hero_DGN_Hero", 14e9, 90e6, 3300, "MP", "UW", Scissors()),
         ("hero_PDE_Hero", 9e9, 60e6, 2300, "MP", "UW", Mirror()),
         ("hero_LBRM_Hero", 9.9e9, 50e6, 2000, "MP", "UW", Mirror())

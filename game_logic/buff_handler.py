@@ -35,9 +35,11 @@ class BuffHandler:
                 return False
         return True
 
-
     @staticmethod
     def apply_buff(hero, buff_name, buff_data, boss=None):
+        attr = buff_data.get("attribute")
+
+        # Check if offsettable by Curse of Decay
         if BuffHandler.is_attribute_buff(buff_data) and hero.curse_of_decay > 0:
             if boss:
                 damage = int(boss.atk * 30)
@@ -49,6 +51,11 @@ class BuffHandler:
             return False, msg
 
         hero.buffs[buff_name] = buff_data
+
+        # Apply immediate impact for all_damage_dealt
+        if attr == "all_damage_dealt":
+            hero.all_damage_dealt += buff_data.get("bonus", 0)
+
         return True, None  # Buff applied successfully
 
     @staticmethod

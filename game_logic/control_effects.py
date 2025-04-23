@@ -40,10 +40,9 @@ def clear_control_effect(hero, effect_name: str):
     return f"🧹 {hero.name} has {effect_name.replace('_', ' ').capitalize()} removed."
 
 def add_calamity(hero, amount, logs, boss=None):
+    previous = hero.calamity
     hero.calamity += amount
-    logs.append(f"💀 {hero.name} gains {amount} Calamity. (Total: {hero.calamity})")
-
-    if hero.calamity >= 5:
+    if previous < 5 and hero.calamity >= 5:
         original_immunity = getattr(hero, 'original_ctrl_immunity', 100)
         hero.ctrl_immunity = max(hero.ctrl_immunity, max(0, original_immunity - 100))
         duration = 2

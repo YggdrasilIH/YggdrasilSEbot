@@ -23,7 +23,6 @@ class Boss:
         self.shrink_debuff = None
         self.non_skill_debuffs = []
         self.buffs = {}
-        self.hd_bonus = 0
         self.all_damage_bonus = 0
         self.shield = 0
         self.curse_of_decay = 0
@@ -40,18 +39,21 @@ class Boss:
                 expired.append(buff)
         for buff_name in expired:
             buff = self.buffs[buff_name]
-            if "hd_bonus" in buff:
-                self.hd_bonus -= buff["hd_bonus"]
-            if "all_damage_bonus" in buff:
-                self.all_damage_bonus -= buff["all_damage_bonus"]
+            attr = buff.get("attribute")
+            bonus = buff.get("bonus", 0)
+            if attr == "HD":
+                self.hd -= bonus
+            elif attr == "all_damage_bonus":
+                self.all_damage_bonus -= bonus
+            elif attr == "atk":
+                self.atk -= bonus
             del self.buffs[buff_name]
 
     def on_hero_controlled(self, hero, effect):
         logs = []
         if effect == "fear":
-            BuffHandler.apply_buff(self, "fear_buff", {
-                "attribute": "HD", "bonus": 50, "rounds": 15
-            })
+            self.hd += 50
+            BuffHandler.apply_buff(self, "fear_buff", {"attribute": "HD", "bonus": 50, "rounds": 15})
             self.attribute_effects.append({
                 "attribute": "HD",
                 "value": 50,
@@ -134,16 +136,15 @@ class Boss:
 
         if fear_count:
             bonus = fear_count * 50
-            BuffHandler.apply_buff(self, "fear_buff", {
-                "attribute": "HD", "bonus": bonus, "rounds": 15
-            })
-            self.attribute_effects.append({
+            self.hd += bonus
+        BuffHandler.apply_buff(self, "fear_buff", {"attribute": "HD", "bonus": bonus, "rounds": 15})
+        self.attribute_effects.append({
                 "attribute": "HD",
                 "value": bonus,
                 "rounds": 15,
                 "name": "HD buff (Fear)"
             })
-            buffs.append(f"+{bonus} HD (Fear)")
+        buffs.append(f"+{bonus} HD (Fear)")
         if silence_count:
             energy_gain = silence_count * 50
             self.energy += energy_gain
@@ -230,8 +231,8 @@ class Boss:
         status = f"{self.name} Status:  HP {self.hp:.1e} | ⚡ {self.energy} | 🔥 ATK {self.atk}"
         if self.all_damage_bonus:
             status += f" | +{self.all_damage_bonus}% DMG"
-        if self.hd_bonus:
-            status += f" | +{self.hd_bonus} HD"
+        if self.hd:
+            status += f" | +{self.hd} HD"
         if self.dr:
             status += f" | DR {int(self.dr * 100)}%"
         if self.ADR:

@@ -80,10 +80,13 @@ class Team:
                     add_targets = []
                     for ally in self.heroes:
                         if ally.is_alive():
-                            logs.extend(BuffHandler.apply_buff(ally, f"add_on_{hero.name}_active", {
-                                "attribute": "all_damage_dealt", "bonus": 3, "rounds": 1
-                            }, boss))
-                            add_targets.append(ally.name)
+                            buff_key = f"add_on_{hero.name}_active"
+                            if buff_key not in ally.buffs:
+                                success, _ = BuffHandler.apply_buff(ally, buff_key, {
+                                    "attribute": "all_damage_dealt", "bonus": 3, "rounds": 9999
+                                }, boss)
+                                if success:
+                                    add_targets.append(ally.name)
                     if add_targets:
                         logs.append(f"✨ All Damage Dealt +3%: {', '.join(add_targets)} (from {hero.name}'s active skill)")
                     logs.extend(skill_logs)
@@ -134,26 +137,41 @@ class Team:
 
         return logs
 
+
     def end_of_round(self, boss, round_num):
         logs = []
         if not boss.is_alive():
             return logs
         logs.append(f"🖚 End of Round {round_num} effects begin.")
+
         for hero in self.heroes:
             if hero.is_alive():
                 hero_logs = []
+                
+                # Call process_buffs to tick down buffs and debuffs
+                hero.process_buffs()  # This will decrement the rounds for buffs and debuffs
+                
+                # Call the hero's custom end_of_round logic
                 if hasattr(hero, "end_of_round"):
                     hero_logs += hero.end_of_round(boss, self, round_num)
+                
+                # Handle Lifestar end-of-round effects if applicable
                 if hasattr(hero, "lifestar") and hero.lifestar and hasattr(hero.lifestar, "end_of_round"):
                     hero_logs += hero.lifestar.end_of_round(hero, self, boss, round_num)
+
+                # Handle Scissors replication logs (if any)
                 scissors_logs = [entry for entry in hero_logs if "Scissors" in entry]
                 non_scissors_logs = [entry for entry in hero_logs if entry not in scissors_logs]
+
+                # Check if Mirror artifact effects need to be logged
                 if hero.artifact and any("Mirror" in str(type(hero.artifact)) for _ in [0]):
                     for entry in hero_logs:
                         if "energy" in entry.lower():
                             logs.append(entry)
                         elif "offsets" in entry:
                             logs.append(entry)
+
+                # If Scissors replication logs are found, process them
                 if scissors_logs:
                     effect_map = {}
                     for entry in scissors_logs:
@@ -165,8 +183,34 @@ class Team:
                     logs.append("✂️ Scissors Replication:")
                     for effect, heroes in effect_map.items():
                         logs.append(f"  {effect}: {', '.join(heroes)}")
+
                 logs.extend(non_scissors_logs)
+
+                                # Decrement control effects manually (like fear, silence, etc.)
+                if hero.has_fear:
+                    hero.fear_rounds -= 1
+                    if hero.fear_rounds <= 0:
+                        hero.has_fear = False
+                        hero.fear_rounds = 0
+                        hero_logs.append(f"{hero.name}'s Fear has ended.")
+
+                if hero.has_silence:
+                    hero.silence_rounds -= 1
+                    if hero.silence_rounds <= 0:
+                        hero.has_silence = False
+                        hero.silence_rounds = 0
+                        hero_logs.append(f"{hero.name}'s Silence has ended.")
+
+                if hero.has_seal_of_light:
+                    hero.seal_rounds -= 1
+                    if hero.seal_rounds <= 0:
+                        hero.has_seal_of_light = False
+                        hero.seal_rounds = 0
+                        hero_logs.append(f"{hero.name}'s Seal of Light has ended.")
+
+        # Process boss end-of-round effects (if any)
         logs.extend(boss.end_of_round_effects(self.heroes, round_num))
+
         logs.append(f"🧠 Boss and team end-of-round effects completed.")
         return logs
 

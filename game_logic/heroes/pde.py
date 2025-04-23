@@ -69,7 +69,7 @@ class PDE(Hero):
                 logs.append(f"{self.name} grants +15% Control Immunity to {h.name}.")
 
         logs.extend(BuffHandler.apply_debuff(boss, "speed_down", {
-            "attribute": "speed", "bonus": -12, "rounds": 2
+            "attribute": "spd", "bonus": -12, "rounds": 2
         }))
         logs.append(f"{self.name} reduces {boss.name}'s speed by 12 for 2 rounds.")
         return logs
@@ -106,7 +106,7 @@ class PDE(Hero):
         logs.append(f"{self.name} and {target.name} are healed for {heal_amt // 1_000_000}M HP each.")
 
         for hero in team.back_line:
-            BuffHandler.apply_buff(hero, "hd_up", {"attribute": "hd", "bonus": hero.hd * 0.10, "rounds": 2}, boss)
+            BuffHandler.apply_buff(hero, "hd_up", {"attribute": "hd", "bonus": 10, "rounds": 2}, boss)
             logs.append(f"{hero.name} receives +10% HD for 2 rounds.")
 
         highest = max(team.heroes, key=lambda h: h.atk)

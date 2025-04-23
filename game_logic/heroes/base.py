@@ -9,8 +9,17 @@ from game_logic.control_effects import apply_control_effect, clear_control_effec
 from game_logic.buff_handler import BuffHandler
 
 class Hero:
+    
+    def decrement_control_effects(self):
+        for effect, rounds_attr in [("fear", "fear_rounds"), ("silence", "silence_rounds"), ("seal_of_light", "seal_rounds")]:
+            rounds = getattr(self, rounds_attr, 0)
+            if rounds > 0:
+                rounds -= 1
+                setattr(self, rounds_attr, rounds)
+                if rounds <= 0:
+                    setattr(self, f"has_{effect}", False)
     def __init__(self, name, hp, atk, armor, spd, crit_rate, crit_dmg, ctrl_immunity, hd, precision,
-                 purify_enable=None, trait_enable=None, artifact=None, lifestar=None):
+                purify_enable=None, trait_enable=None, artifact=None, lifestar=None):
         self.name = name
         self.hp = hp
         self.max_hp = hp
@@ -55,6 +64,11 @@ class Hero:
         self.total_damage_dealt = 0
         self.purify_enable = purify_enable
         self.trait_enable = trait_enable
+
+        if self.artifact:
+            self.artifact.owner = self
+        if self.lifestar:
+            self.lifestar.owner = self
 
     def set_enables(self, purify, trait):
         self.purify_enable = purify
@@ -106,12 +120,19 @@ class Hero:
             if "attribute" in buff and "bonus" in buff:
                 attr = buff["attribute"]
                 alias = {
-                    "control_immunity": "ctrl_immunity",
-                    "crit_damage": "crit_dmg",
-                    "crit_rate": "crit_rate",
-                    "damage_reduction": "DR",
-                    "all_damage_reduction": "ADR"
-                }
+        "control_immunity": "ctrl_immunity",
+        "crit_damage": "crit_dmg",
+        "crit_rate": "crit_rate",
+        "damage_reduction": "DR",
+        "all_damage_reduction": "ADR",
+        "atk": "atk",
+        "armor": "armor",
+        "precision": "precision",
+        "hd": "hd",
+        "spd": "spd",
+        "healing_received": "healing_received",
+        "all_damage_dealt": "all_damage_dealt"
+    }
                 real_attr = alias.get(attr, attr)
                 if hasattr(self, real_attr):
                     setattr(self, real_attr, getattr(self, real_attr) - buff["bonus"])
@@ -124,6 +145,7 @@ class Hero:
             self.regen_buff["rounds"] -= 1
             if self.regen_buff["rounds"] <= 0:
                 self.regen_buff = None
+
 
     def process_poison(self):
         total_poison = 0
@@ -150,6 +172,7 @@ class Hero:
         return []
 
     def end_of_round(self, boss, team, round_num):
+        self.decrement_control_effects()
         messages = []
         messages.append(f"🔄 End-of-Round for {self.name}")
 

@@ -60,9 +60,8 @@ class MFF(Hero):
             "attribute": "precision", "bonus": 10, "rounds": 3
         }, boss)
         shield_val = int(self.atk * 2)
-        buffs += BuffHandler.apply_buff(ally, "mff_passive_shield", {
-            "attribute": "shield", "shield": shield_val, "rounds": 3
-        }, boss)
+        ally.apply_buff("mff_passive_shield", {"attribute": "shield", "shield": shield_val, "rounds": 3})
+
 
         if buffs:
             logs.append(f"🧬 {self.name} passively empowers {ally.name}: +ATK, DR, Precision, Shield.")
@@ -87,9 +86,8 @@ class MFF(Hero):
                     "attribute": "atk", "bonus": int(ally.atk * 0.22), "rounds": 3
                 }))
                 shield_val = int(self.atk * 26)
-                logs.extend(BuffHandler.apply_buff(ally, "ef2_shield", {
-                    "attribute": "shield", "shield": shield_val, "rounds": 3
-                }))
+                ally.apply_buff("ef2_shield", {"attribute": "shield", "shield": shield_val, "rounds": 3})
+                logs.append(f"🛡️ {ally.name} gains a {shield_val} shield from MFF's EF2.")
             logs.append(f"🌿 EF2 (Evolutionary Factor): All allies gain +22% ATK and a {int(self.atk * 26)} shield.")
 
         elif self.evolutionary_factor == 3 and not self.permanent_ef3_bonus_active:
@@ -113,7 +111,7 @@ class MFF(Hero):
 
         return logs
 
-    def on_end_of_round(self, team, boss):
+    def end_of_round(self, boss, team, round_num):
         logs = []
 
         if self.permanent_ef3_bonus_active:

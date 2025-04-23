@@ -27,10 +27,6 @@ def hero_deal_damage(source, target, base_damage, is_active, team, allow_counter
 
     # Phase 2 multipliers: GK, Defier
 
-    damage *= (1 + source.hd * 0.007)
-    damage *= (1 + precision * 0.003)
-    damage *= (1 + source.all_damage_dealt / 100)
-
     # EF3 poison bonus
     if hasattr(source, "ef3_poison_bonus") and any(
         isinstance(buff, dict) and buff.get("attribute") == "poison"
@@ -53,9 +49,6 @@ def hero_deal_damage(source, target, base_damage, is_active, team, allow_counter
             logs.append(f"🟢 {source.name} deals +{int(bonus_multiplier * 100)}% damage from Giant Killer.")
 
     # Defier (DEF)
-    if getattr(source, "defier", False) and target.hp >= 0.70 * target.max_hp:
-        damage *= 1.30
-        logs.append(f"🟢 {source.name} deals +30% damage from Defier.")
     if getattr(source, "defier", False) and target.hp >= 0.70 * target.max_hp:
         damage *= 1.30
         logs.append(f"🟢 {source.name} deals +30% damage from Defier.")
@@ -151,7 +144,7 @@ def hero_deal_damage(source, target, base_damage, is_active, team, allow_counter
             logs.extend(extra_logs)
 
     # Boss counterattack (only if target is boss and is_active/basic)
-    if allow_counter and hasattr(target, "counterattack") and is_active:
+    if allow_counter and hasattr(target, "counterattack"):
         logs.extend(target.counterattack(team.heroes))
 
     return logs

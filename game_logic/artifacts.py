@@ -20,6 +20,8 @@ class Artifact:
         pass
 
     def apply_end_of_round(self, hero, team, boss, round_num):
+        if hero.has_seal_of_light:
+            return [stylize_log("info", f"{hero.name}'s Mirror effect is sealed and does nothing.")]
         return []
 
 class Scissors(Artifact):
@@ -30,9 +32,16 @@ class Scissors(Artifact):
         if hasattr(boss, "attribute_effects"):
             effects = boss.attribute_effects[-2:]
             for effect in effects:
-                for target in team.get_line(hero):
-                    target.apply_attribute_effect(effect, ratio=0.3)
-                    replicated_msgs.append(stylize_log("buff", f"{target.name} replicates {effect['name']} from boss (Scissors)."))
+                if hero.has_seal_of_light:
+                    continue  # Artifact suppressed by Seal of Light on wearer
+            for target in team.get_line(hero):
+                scaled_bonus = int(effect.get("value", 0) * 0.3)
+                target.apply_buff(f"scissors_{effect['name']}_{round_num}", {
+                    "attribute": effect.get("attribute"),
+                    "bonus": scaled_bonus,
+                    "rounds": effect.get("rounds", 1)
+                })
+                replicated_msgs.append(stylize_log("buff", f"{target.name} replicates {effect['name']} from boss (Scissors)."))
         return replicated_msgs
 
 class DB(Artifact):
@@ -45,6 +54,8 @@ class DB(Artifact):
         self.enabled = True
 
     def on_active_skill(self, team, boss):
+        if self.owner.has_seal_of_light:
+            return [stylize_log("info", f"{self.owner.name}'s Demon Bell is sealed and does nothing.")]
         gained = []
         blocked = []
         extras = []

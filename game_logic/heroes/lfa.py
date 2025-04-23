@@ -106,7 +106,7 @@ class LFA(Hero):
 
             logs.extend(hero_deal_damage(self, boss, total_damage, is_active=True, team=team, allow_counter=False, allow_crit=False))
 
-            self.apply_buff("lfa_all_dmg_up", {"bonus": 15, "rounds": 2})
+            BuffHandler.apply_buff(self, "lfa_all_dmg_up", {"attribute": "all_damage_dealt", "bonus": 15, "rounds": 2}, boss)
             logs.append(f"✅ {self.name} gains +15 all_damage_dealt for 2 rounds.")
 
         return logs
