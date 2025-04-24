@@ -104,7 +104,7 @@ class DGN(Hero):
         return logs
 
     def end_of_round(self, boss, team, round_num=None):
-        logs = []
+        logs = super().end_of_round(boss, team, round_num)
         if self.transition_power < 12:
             return logs
 

@@ -130,7 +130,7 @@ class SQH(Hero):
         return logs
 
     def end_of_round(self, boss, team, round_num=None):
-        logs = []
+        logs = super().end_of_round(boss, team, round_num)
         heal_self = int(self.max_hp * 0.20)
         self.hp = min(self.max_hp, self.hp + heal_self)
         logs.append(f"💖 {self.name} heals self for {self.format_damage_log(heal_self)}.")

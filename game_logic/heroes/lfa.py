@@ -17,33 +17,44 @@ class LFA(Hero):
             logs.append(f"{self.name} is silenced and cannot use active skill.")
             return logs
 
-        total_damage = 0
-        for i in range(2):
-            dmg = self.atk * 12
-            logs.extend(hero_deal_damage(self, boss, dmg, is_active=True, team=team, allow_counter=(i == 0), allow_crit=True))
-            total_damage += dmg
+        base_hits = []
+        crit_failed = False
 
+        # First 2 hits
+        for _ in range(2):
+            base_hits.append(self.atk * 12)
+            if random.random() >= (self.crit_rate / 100):
+                crit_failed = True
+
+        # Conditional extra hits if boss is below 60%
         if boss.hp < boss.max_hp * 0.60:
-            second_total = 0
-            for i in range(2):
-                dmg = self.atk * 12
-                logs.append(f"🕈 {self.name} deals {dmg // 1_000_000}M base damage (extra hit {i+1}/2).")
-                logs.extend(hero_deal_damage(self, boss, dmg, is_active=True, team=team, allow_counter=False, allow_crit=True))
-                second_total += dmg
-                total_damage += dmg
+            for _ in range(2):
+                base_hits.append(self.atk * 12)
+                if random.random() >= (self.crit_rate / 100):
+                    crit_failed = True
+            second_total = sum(base_hits[2:])
             heal_amt = int(second_total * 1.20)
             self.hp = min(self.max_hp, self.hp + heal_amt)
             logs.append(f"❤️ {self.name} heals for {heal_amt // 1_000_000}M HP from extra attacks.")
 
-        dmg = self.atk * 12
-        logs.extend(hero_deal_damage(self, boss, dmg, is_active=True, team=team, allow_counter=False, allow_crit=False))
-        total_damage += dmg
+        # Final pre-burst hit
+        base_hits.append(self.atk * 12)
+        if random.random() >= (self.crit_rate / 100):
+            crit_failed = True
 
-        bonus_damage = int(total_damage * 1.20)
-        logs.append(f"🔫 {self.name} unleashes {bonus_damage // 1_000_000}M bonus burst damage.")
-        logs.extend(hero_deal_damage(self, boss, bonus_damage, is_active=True, team=team, allow_counter=False, allow_crit=True))
+        total_damage = sum(base_hits)
+        burst_damage = int(total_damage * 1.20)
+        logs.append(f"🔫 {self.name} unleashes {burst_damage // 1_000_000}M bonus burst damage.")
+        total_damage += burst_damage
 
-        # Permanent ATK steal
+        # Apply full damage in one call for proper phase 2 scaling
+        logs.extend(hero_deal_damage(self, boss, total_damage, is_active=True, team=team, allow_counter=True, allow_crit=True))
+
+        # Balanced Strike override logic
+        if hasattr(self.trait_enable, "override_crit_check"):
+            self.trait_enable.override_crit_check(crit_failed)
+
+        # Apply ATK steal and debuff
         steal_amount = int(boss.atk * 0.30)
         logs.extend(BuffHandler.apply_debuff(boss, "lfa_atk_down_active", {
             "attribute": "atk", "bonus": -0.30, "rounds": 9999
@@ -62,6 +73,7 @@ class LFA(Hero):
             logs.extend(self.release_transition_skill(boss, team))
 
         return logs
+
 
     def basic_attack(self, boss, team):
         logs = [f"🔪 {self.name} uses Basic Attack:"]

@@ -46,27 +46,15 @@ class Team:
             return logs
 
         from game_logic.buff_handler import BuffHandler
-        energy_gain_lines = []
-        curse_lines = []
+
         for hero in self.heroes:
-            result = BuffHandler.apply_buff(hero, "start_of_round_energy", {
-                "attribute": "energy", "bonus": 50, "rounds": 1
-            }, boss)
-            for line in result:
-                if isinstance(line, str) and "offsets" in line:
-                    curse_lines.append(line)
-                else:
-                    energy_gain_lines.append(line)
-        if energy_gain_lines:
-            grouped = {}
-            for l in energy_gain_lines:
-                if isinstance(l, str) and "+50 energy" in l:
-                    name = l.split()[0]
-                    grouped.setdefault(50, []).append(name)
-            for amount, names in grouped.items():
-                logs.append(f"⚡ Start-of-Round Energy: {', '.join(names)} (+{amount})")
-        if curse_lines:
-            logs.extend([str(l) for l in curse_lines if isinstance(l, str)])
+            hero.energy += 50
+            logs.append(f"⚡ {hero.name} gains +50 energy at start of round (direct).")
+
+        for hero in self.heroes:
+            # Ensure Specter or other lifestars have start-of-round logic
+            if hero.lifestar and hasattr(hero.lifestar, "start_of_round"):
+                logs += hero.lifestar.start_of_round(hero, self, boss, round_num)
 
         if not boss.is_alive():
             return logs
@@ -154,7 +142,14 @@ class Team:
                 # Call the hero's custom end_of_round logic
                 if hasattr(hero, "end_of_round"):
                     hero_logs += hero.end_of_round(boss, self, round_num)
-                
+                            # 🔁 Purify Enables (e.g., Mark Purify)
+                            
+                if hero.purify_enable and hasattr(hero.purify_enable, "apply_end_of_round"):
+                    result = hero.purify_enable.apply_end_of_round(hero, boss)
+                    if result:
+                        hero_logs.append(result)
+
+                        
                 # Handle Lifestar end-of-round effects if applicable
                 if hasattr(hero, "lifestar") and hero.lifestar and hasattr(hero.lifestar, "end_of_round"):
                     hero_logs += hero.lifestar.end_of_round(hero, self, boss, round_num)

@@ -123,5 +123,6 @@ class PDE(Hero):
         return logs
 
     def end_of_round(self, boss, team, round_num=None):
+        logs = super().end_of_round(boss, team, round_num)
         self.triggered_this_round = False
         return []

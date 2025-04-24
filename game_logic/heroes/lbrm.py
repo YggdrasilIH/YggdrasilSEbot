@@ -172,7 +172,7 @@ class LBRM(Hero):
 
     def end_of_round(self, boss, team, round_num):
         self.ctrl_removal_used = False
-        logs = []
+        logs = super().end_of_round(boss, team, round_num)
         if self.transition_power >= 6:
             logs.extend(self.release_transition_skill(boss, team))
         return logs

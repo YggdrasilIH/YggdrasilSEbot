@@ -45,72 +45,50 @@ class Scissors(Artifact):
         return replicated_msgs
 
 class DB(Artifact):
-    def apply_start_of_battle(self, team, round_num):
-        self.owner.energy += 50
-        return [stylize_log("energy", f"🔶 {self.owner.name} gains +50 energy from Demon Bell at battle start.")]
-    def bind_team(self, team):
-        self.team = team
-    def __init__(self):
-        self.enabled = True
-
     def on_active_skill(self, team, boss):
-        if self.owner.has_seal_of_light:
-            return [stylize_log("info", f"{self.owner.name}'s Demon Bell is sealed and does nothing.")]
-        gained = []
-        blocked = []
-        extras = []
-
+        logs = []
         for hero in team.heroes:
-            success, msg = BuffHandler.apply_buff(hero, "db_energy", {
-                "attribute": "energy", "bonus": 20, "rounds": 1
-            }, boss)
-
-            if success:
-                gained.append(hero.name)
-                if random.random() < 0.5:
-                    extra_success, _ = BuffHandler.apply_buff(hero, "db_energy_extra", {
-                        "attribute": "energy", "bonus": 10, "rounds": 1
-                    }, boss)
-                    if extra_success:
-                        extras.append(hero.name)
+            # Attempt to apply energy, blockable by Curse
+            if hero.curse_of_decay > 0:
+                hero.curse_of_decay -= 1
+                damage = boss.atk * 30
+                hero.hp -= damage
+                if hero.hp < 0:
+                    hero.hp = 0
+                logs.append(f"💀 Curse of Decay offsets energy buff on {hero.name}. Takes {int(damage):,} damage. (1 layer removed)")
             else:
-                blocked.append(hero.name)
-                if msg:
-                    blocked.append(f"{hero.name} (blocked: {msg})")
+                hero.energy += 20
+                logs.append(f"⚡ {hero.name} gains +20 energy from DB (direct).")
 
-        msg_parts = []
-        if gained:
-            main = f"{', '.join(gained)} gain 20 energy"
-            if extras:
-                main += f" (+10 extra for {', '.join(extras)})"
-            msg_parts.append(main)
-        if blocked:
-            msg_parts.append(f"energy feed to {', '.join(blocked)} blocked by Curse of Decay")
+                # 50% chance to gain +10 more
+                import random
+                if random.random() < 0.5:
+                    hero.energy += 10
+                    logs.append(f"⚡ {hero.name} gains an extra +10 energy from DB (direct).")
 
-        return [stylize_log("energy", f"Demon Bell: {'; '.join(msg_parts)}.")]
+        return logs
 
 class Mirror(Artifact):
-    def bind_team(self, team):
-        self.team = team
     def __init__(self):
         self.last_trigger_round = -3
-        self.bonus = 0
-
-    def apply_start_of_battle(self, team, round_num):
-        self.last_trigger_round = round_num
         self.bonus = 4.5
-        self.owner.energy += 50
-        msg = stylize_log("energy", f"🔶 {self.owner.name} gains +50 energy from Mirror at battle start.")
-        self.owner.all_damage_dealt += self.bonus
-        return [msg]
 
     def apply_end_of_round(self, hero, team, boss, round_num):
         msgs = []
-        BuffHandler.apply_buff(hero, "mirror_energy", {
-            "attribute": "energy", "bonus": 15, "rounds": 1
-        }, boss)
-        msgs.append(stylize_log("energy", f"{hero.name} gains 15 energy from Mirror."))
 
+        # Curse interaction (blockable energy gain)
+        if hero.curse_of_decay > 0:
+            hero.curse_of_decay -= 1
+            damage = boss.atk * 30
+            hero.hp -= damage
+            if hero.hp < 0:
+                hero.hp = 0
+            msgs.append(f"💀 Curse of Decay offsets energy buff on {hero.name}. Takes {int(damage):,} damage. (1 layer removed)")
+        else:
+            hero.energy += 15
+            msgs.append(stylize_log("energy", f"{hero.name} gains +15 energy from Mirror."))
+
+        # Apply all_damage_dealt bonus every 3 rounds
         if round_num - self.last_trigger_round >= 3:
             self.last_trigger_round = round_num
             self.bonus = 4.5
@@ -119,7 +97,9 @@ class Mirror(Artifact):
                 msgs.append(stylize_log("buff", f"{h.name} gains {self.bonus:.1f}% all damage from Mirror."))
         else:
             self.bonus -= 1.5
+
         return msgs
+
 
 class Antlers(Artifact):
     def apply_end_of_round(self, hero, team, boss, round_num):

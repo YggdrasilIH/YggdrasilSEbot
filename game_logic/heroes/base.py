@@ -300,10 +300,10 @@ class Hero:
                        ctrl_immunity=80, hd=0, precision=100, artifact=artifact, lifestar=lifestar)
         elif hero_id == "hero_PDE_Hero":
             hero = PDE("PDE", hp, atk, armor=4000, spd=spd, crit_rate=11, crit_dmg=150,
-                       ctrl_immunity=105, hd=0, precision=100, artifact=artifact, lifestar=lifestar)
+                       ctrl_immunity=125, hd=0, precision=100, artifact=artifact, lifestar=lifestar)
         elif hero_id == "hero_LBRM_Hero":
             hero = LBRM("LBRM", hp, atk, armor=4000, spd=spd, crit_rate=10, crit_dmg=145,
-                        ctrl_immunity=110, hd=0, precision=100, artifact=artifact, lifestar=lifestar)
+                        ctrl_immunity=130, hd=0, precision=100, artifact=artifact, lifestar=lifestar)
         elif hero_id == "hero_DGN_Hero":
             hero = DGN("DGN", hp, atk, armor=4000, spd=spd, crit_rate=10, crit_dmg=150,
                        ctrl_immunity=80, hd=0, precision=100, artifact=artifact, lifestar=lifestar)

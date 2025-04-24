@@ -1,6 +1,3 @@
-
-# game_logic/damage_utils.py
-
 from game_logic.buff_handler import BuffHandler
 from utils.log_utils import stylize_log
 import random
@@ -15,136 +12,117 @@ def hero_deal_damage(source, target, base_damage, is_active, team, allow_counter
     crit_dmg = min(source.crit_dmg, 150)
     precision = min(source.precision, 150)
 
+    # Phase 1: Base scaling
     damage = base_damage
     if crit:
-        # Critical hits do 2x base damage + 1% extra per 1% over 100% crit damage
-        damage *= 2 + ((crit_dmg - 100) / 100)
-
-    # Stack HD, Precision, All Damage Dealt (Phase 1)
+        damage *= 2 + ((crit_dmg) / 100)
     damage *= (1 + source.hd * 0.007)
     damage *= (1 + precision * 0.003)
     damage *= (1 + source.all_damage_dealt / 100)
 
-    # Phase 2 multipliers: GK, Defier
+    # Save phase 1 result
+    phase1 = damage
 
-    # EF3 poison bonus
-    if hasattr(source, "ef3_poison_bonus") and any(
-        isinstance(buff, dict) and buff.get("attribute") == "poison"
-        for buff in getattr(target, "buffs", {}).values()
-    ):
-        poison_bonus = getattr(source, "ef3_poison_bonus", 0)
-        poison_extra = int(damage * poison_bonus)
-        damage += poison_extra
-        logs.append(f"🟢 {source.name} deals +{poison_extra // 1_000_000}M bonus poison damage to {target.name} (EF3 bonus).")
+    # Phase 2: Multiplicative bonuses
+    poison_bonus = getattr(source, "ef3_poison_bonus", 0) if any(
+        isinstance(b, dict) and b.get("attribute") == "poison"
+        for b in getattr(target, "buffs", {}).values()
+    ) else 0
 
-    # Balanced Strike (Enable)
-    # Moved post-damage, handled below
-    # Giant Killer (GK)
+    gk = 0
     if getattr(source, "gk", False) and source.hp > 0:
         ratio = target.hp / source.hp
         if ratio > 1:
             bonus_steps = floor((ratio - 1) / 0.10)
-            bonus_multiplier = min(bonus_steps * 0.02, 1.0)
-            damage *= (1 + bonus_multiplier)
-            logs.append(f"🟢 {source.name} deals +{int(bonus_multiplier * 100)}% damage from Giant Killer.")
+            gk = min(bonus_steps * 0.02, 1.0)
+            logs.append(f"🟢 {source.name} gains +{int(gk * 100)}% from Giant Killer.")
 
-    # Defier (DEF)
-    if getattr(source, "defier", False) and target.hp >= 0.70 * target.max_hp:
-        damage *= 1.30
-        logs.append(f"🟢 {source.name} deals +30% damage from Defier.")
+    defier = 0.30 if getattr(source, "defier", False) and target.hp >= 0.70 * target.max_hp else 0
+    if defier: logs.append(f"🟢 {source.name} gains +30% from Defier.")
 
-    # DR reduction (offsettable)
+    bs_bonus = 0
+    if hasattr(source, "trait_enable") and hasattr(source.trait_enable, "apply_crit_bonus"):
+        raw_for_bs = base_damage * (1 + source.hd * 0.007) * (1 + precision * 0.003) * (1 + source.all_damage_dealt / 100)
+        if crit:
+            raw_for_bs *= 2 + ((crit_dmg - 100) / 100)
+        heal_amt, extra_dmg = source.trait_enable.apply_crit_bonus(int(raw_for_bs), crit)
+        bs_bonus = extra_dmg / raw_for_bs if raw_for_bs > 0 else 0
+        if heal_amt > 0:
+            source.hp = min(source.max_hp, source.hp + heal_amt)
+            logs.append(f"❤️ {source.name} heals {heal_amt // 1_000_000}M HP from Balanced Strike.")
+
+    # Final Phase 2 multiplier
+    phase2_multiplier = (1 + poison_bonus) * (1 + gk) * (1 + defier) * (1 + bs_bonus)
+    damage = int(phase1 * phase2_multiplier)
+
+    if poison_bonus:
+        logs.append(f"🟢 {source.name} gains +{int(poison_bonus * 100)}% bonus from EF3 Poison.")
+
+    # DR / ADR reduction
     dr = min(getattr(target, "dr", 0), 0.75)
+    adr = min(getattr(target, "adr", 0), 0.75)
     if dr > 0:
         logs.append(stylize_log("debuff", f"{target.name} reduces damage by {int(dr * 100)}% DR."))
-    damage *= (1 - dr)
-
-    # ADR reduction (non-offsettable)
-    adr = min(getattr(target, "adr", 0), 0.75)
     if adr > 0:
         logs.append(stylize_log("debuff", f"{target.name} reduces damage by {int(adr * 100)}% ADR."))
+    damage *= (1 - dr)
     damage *= (1 - adr)
 
-    # Apply shield first
+    # Shield
     if target.shield > 0:
         if target.shield >= damage:
             target.shield -= damage
-            logs.append(f"🛡️ {target.name}'s shield absorbs {int(damage) // 1_000_000}M damage.")
+            logs.append(f"🛡️ {target.name}'s shield absorbs {damage // 1_000_000}M damage.")
             damage = 0
         else:
-            logs.append(f"🛡️ {target.name}'s shield absorbs {int(target.shield) // 1_000_000}M damage.")
+            logs.append(f"🛡️ {target.name}'s shield absorbs {target.shield // 1_000_000}M damage.")
             damage -= target.shield
             target.shield = 0
 
-    # Unbending Will check
+    # Unbending Will
     if hasattr(target, "trait_enable") and hasattr(target.trait_enable, "prevent_death"):
         if target.trait_enable.prevent_death(target, damage):
             logs.append(stylize_log("control", f"{target.name} survives fatal damage due to Unbending Will!"))
             damage = target.hp - 1
 
-    # Deal final damage
     damage = max(0, int(damage))
     if hasattr(source, "total_damage_dealt"):
         source.total_damage_dealt += damage
 
+    # Final damage application
     if hasattr(target, "take_damage"):
-        extra_logs = target.take_damage(damage, source, team)
-        if isinstance(extra_logs, list):
-            logs.extend(extra_logs)
+        logs += target.take_damage(damage, source, team) or []
     else:
         target.hp -= damage
 
-    if isinstance(damage, int) and damage > 0:
+    if damage > 0:
         logs.append(f"🟢 {source.name} deals {damage // 1_000_000}M damage to {target.name} ({'CRIT' if crit else 'Normal'} hit).")
 
-    # Balanced Strike follow-up (moved post-damage)
-    if hasattr(source, "trait_enable") and hasattr(source.trait_enable, "apply_crit_bonus"):
-        # Use raw pre-reduction damage for BS bonus/heal
-        raw_for_bs = base_damage
-        raw_for_bs *= (1 + source.hd * 0.007)
-        raw_for_bs *= (1 + precision * 0.003)
-        raw_for_bs *= (1 + source.all_damage_dealt / 100)
-        if crit:
-            raw_for_bs *= 2 + ((crit_dmg - 100) / 100)
+    if bs_bonus > 0 and extra_dmg > 0:
+        if hasattr(target, "take_damage"):
+            logs += target.take_damage(extra_dmg, source, team) or []
+        else:
+            target.hp -= extra_dmg
+        logs.append(f"🟢 {source.name} deals {extra_dmg // 1_000_000}M bonus damage from Balanced Strike.")
+        if hasattr(source, "total_damage_dealt"):
+            source.total_damage_dealt += extra_dmg
 
-        heal_amt, extra_dmg = source.trait_enable.apply_crit_bonus(int(raw_for_bs), crit)
-        if heal_amt > 0:
-            source.hp = min(source.max_hp, source.hp + heal_amt)
-            logs.append(f"❤️ {source.name} heals {heal_amt // 1_000_000}M HP from Balanced Strike.")
-            if hasattr(target, "take_damage"):
-                bonus_logs = target.take_damage(extra_dmg, source, team)
-                if isinstance(bonus_logs, list):
-                    logs.extend(bonus_logs)
-            else:
-                target.hp -= extra_dmg
-            logs.append(f"🟢 {source.name} deals {extra_dmg // 1_000_000}M bonus damage from Balanced Strike.")
-
-    # Trigger after-attack effects
+    # After-attack effects
     if hasattr(source, "after_attack"):
-        extra_logs = source.after_attack(source, target, "active" if is_active else "basic", team)
-        if isinstance(extra_logs, list):
-            logs.extend(extra_logs)
+        logs += source.after_attack(source, target, "active" if is_active else "basic", team) or []
 
-    # Trigger lifestar on_ally_hit for teammates
+    # Lifestar triggers
     for ally in team.heroes:
-        if (
-            ally != target and ally.is_alive() and
-            hasattr(ally, "lifestar") and
-            hasattr(ally.lifestar, "on_ally_hit") and
-            hasattr(target, "has_seal_of_light")  # Ensure target is a hero
-        ):
-            extra_logs = ally.lifestar.on_ally_hit(target, team, "active" if is_active else "basic")
-            if isinstance(extra_logs, list):
-                logs.extend(extra_logs)
+        if ally != target and ally.is_alive() and hasattr(ally, "lifestar") and hasattr(ally.lifestar, "on_ally_hit"):
+            if hasattr(target, "has_seal_of_light"):
+                logs += ally.lifestar.on_ally_hit(target, team, "active" if is_active else "basic") or []
 
-    # Trigger on-receive-damage reactions
+    # On-receive-damage hooks
     if hasattr(target, "on_receive_damage"):
-        extra_logs = target.on_receive_damage(damage, team, source)
-        if isinstance(extra_logs, list):
-            logs.extend(extra_logs)
+        logs += target.on_receive_damage(damage, team, source) or []
 
-    # Boss counterattack (only if target is boss and is_active/basic)
+    # Counterattack
     if allow_counter and hasattr(target, "counterattack"):
-        logs.extend(target.counterattack(team.heroes))
+        logs += target.counterattack(team.heroes)
 
     return logs
