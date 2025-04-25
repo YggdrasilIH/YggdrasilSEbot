@@ -222,29 +222,42 @@ class Hero:
         return messages
 
     def get_status_description(self):
+        from collections import defaultdict
+
         status = f"{self.name} Status:  HP {self.hp / 1e6:.0f}M/{self.max_hp / 1e6:.0f}M | Energy {self.energy} | Ctrl Imm {self.ctrl_immunity}"
         status += f" | Calamity {self.calamity} | Curse {self.curse_of_decay}"
 
         attr_buffs = []
         attr_debuffs = []
+
         for buff in self.buffs.values():
             if isinstance(buff, dict) and "attribute" in buff and "bonus" in buff:
                 val = buff["bonus"]
-                label = f"{buff['attribute']}"
+                label = buff["attribute"]
                 if val > 0:
-                    attr_buffs.append(f"+{val}{label}")
+                    attr_buffs.append((label, val))
                 elif val < 0:
-                    attr_debuffs.append(f"{val}{label}")
+                    attr_debuffs.append((label, val))
 
+        # Add legacy reductions
         if self.atk_reduction:
-            attr_debuffs.append(f"-{self.atk_reduction*100:.0f}%ATK")
+            attr_debuffs.append(("atk", -self.atk_reduction * 100))
         if self.armor_reduction:
-            attr_debuffs.append(f"-{self.armor_reduction*100:.0f}%Armor")
+            attr_debuffs.append(("armor", -self.armor_reduction * 100))
 
         if attr_buffs:
-            status += " | Buffs: " + ", ".join(attr_buffs)
+            grouped = defaultdict(float)
+            for attr, val in attr_buffs:
+                grouped[attr] += val
+            formatted = [f"+{int(v) if v.is_integer() else round(v, 1)}{k}" for k, v in grouped.items()]
+            status += " | Buffs: " + ", ".join(formatted)
+
         if attr_debuffs:
-            status += " | Debuffs: " + ", ".join(attr_debuffs)
+            grouped = defaultdict(float)
+            for attr, val in attr_debuffs:
+                grouped[attr] += val
+            formatted = [f"{int(v) if v.is_integer() else round(v, 1)}{k}" for k, v in grouped.items()]
+            status += " | Debuffs: " + ", ".join(formatted)
 
         control_effects = []
         if self.has_silence:
@@ -253,6 +266,7 @@ class Hero:
             control_effects.append(f"Fear({self.fear_rounds})")
         if self.has_seal_of_light:
             control_effects.append(f"Seal({self.seal_rounds})")
+
         if control_effects:
             icon_map = {
                 "Silence": "🔇",
@@ -263,6 +277,7 @@ class Hero:
             status += " | Ctrl: " + ", ".join(styled)
 
         return status
+
 
     def trigger_foresight_basic(self):
         self.all_damage_dealt += 30

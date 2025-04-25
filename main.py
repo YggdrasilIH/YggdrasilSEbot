@@ -9,8 +9,9 @@ from game_logic.artifacts import Scissors, DB, Mirror, Antlers
 from game_logic.cores import active_core, PDECore
 from game_logic.lifestar import Specter
 from utils.battle import chunk_logs  # Ensure this is imported at top
-from game_logic.enables import ControlPurify, AttributeReductionPurify, MarkPurify
-from game_logic.enables import BalancedStrike, UnbendingWill
+
+
+from game_logic.enables import ControlPurify, AttributeReductionPurify, MarkPurify, BalancedStrike, UnbendingWill
 
 purify_mapping = {
     "CP": ControlPurify(),
@@ -55,8 +56,52 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 tree = bot.tree
 guild_id = discord.Object(id=1358992627424428176)
 
+import textwrap
+from utils.log_utils import stylize_log
+
+
+def detect_category(line):
+    lowered = line.lower()
+    if "energy" in lowered: return "energy"
+    if "heals" in lowered or "healed" in lowered: return "buff"
+    if "damage" in lowered: return "attack"
+    if "buff" in lowered or "gains" in lowered: return "buff"
+    if "debuff" in lowered or "reduction" in lowered: return "debuff"
+    if "counter" in lowered: return "counter"
+    if "shield" in lowered: return "buff"
+    if "poison" in lowered or "bleed" in lowered: return "poison"
+    if "fear" in lowered or "silence" in lowered or "seal" in lowered: return "debuff"
+    if "calamity" in lowered: return "calamity"
+    if "curse of decay" in lowered: return "curse"
+    if "transition" in lowered: return "transition"
+    if "passive" in lowered: return "passive"
+    return ""
+
+def format_logs_as_bullet_points(logs):
+    formatted_lines = []
+    for line in logs:
+        if isinstance(line, str) and line.strip():
+            category = detect_category(str(line))
+            formatted_lines.append(stylize_log(str(line), category))
+            if category in {"control", "transition", "passive", "curse", "calamity", "debuff", "attack"}:
+                formatted_lines.append("")
+    return "\n".join(formatted_lines)
+
+def chunk_logs(log_block, limit=1900):
+    chunks = []
+    current_chunk = ""
+    for line in log_block.split("\n"):
+        if len(current_chunk) + len(line) + 1 > limit:
+            chunks.append(current_chunk.strip())
+            current_chunk = ""
+        current_chunk += line + "\n"
+    if current_chunk:
+        chunks.append(current_chunk.strip())
+    return chunks
+
 @tree.command(name="debugbattle", description="Run full battle with logs", guild=guild_id)
-async def debug_battle(interaction: discord.Interaction):
+async def debug_battle(interaction):
+    from discord import Interaction
     global active_core
     active_core = PDECore()
 
@@ -80,32 +125,11 @@ async def debug_battle(interaction: discord.Interaction):
 
     team = Team(heroes, heroes[:2], heroes[2:])
     boss = Boss()
-    logs = []
-    for hero in team.heroes:
-        print(f"[DEBUG] {hero.name} energy before start_of_battle: {hero.energy}")
-        if hasattr(hero, "start_of_battle"):
-            logs.extend(hero.start_of_battle(team, boss))
 
-    for round_num in range(1, 16):
-        for hero in team.heroes:
-            if hero.lifestar and hasattr(hero.lifestar, "start_of_round"):
-                hero.lifestar.start_of_round(hero, team, boss, round_num)
+    await interaction.response.send_message("🧪 Starting debug battle with detailed logs...", ephemeral=True)
+    from battle import simulate_battle
+    await simulate_battle(interaction, team, boss, mode="detailed")
 
-        for hero in team.heroes:
-            if hero.lifestar and hasattr(hero.lifestar, "start_of_round"):
-                logs.extend(hero.lifestar.start_of_round(hero, team, boss, round_num))
-
-                if all(not h.is_alive() for h in team.heroes) or not boss.is_alive():
-                    break
-        logs.extend(team.perform_turn(boss, round_num))
-        logs.extend(team.end_of_round(boss, round_num))
-
-    verdict = "✅ Boss defeated!" if not boss.is_alive() else ("❌ All heroes have fallen!" if all(not h.is_alive() for h in team.heroes) else "⚔️ Battle ended after 15 rounds.")
-    logs.append(verdict)
-    chunks = ["".join(str(entry) for entry in logs[i:i+20]) for i in range(0, len(logs), 20)]
-    await interaction.response.send_message(chunks[0], ephemeral=True)
-    for chunk in chunks[1:]:
-        await interaction.followup.send(chunk, ephemeral=True)
 
 @tree.command(name="debugquick", description="Run a fast debug battle summary", guild=guild_id)
 async def debug_quick(interaction: discord.Interaction):
@@ -135,11 +159,18 @@ async def debug_quick(interaction: discord.Interaction):
     boss = Boss()
 
     for hero in team.heroes:
+        if hero.artifact and hasattr(hero.artifact, "apply_start_of_battle"):
+            result = hero.artifact.apply_start_of_battle(team, round_num=1)
+            if result:
+                print(f"[DEBUG] {hero.name} artifact start-of-battle effect triggered.")
         if hasattr(hero, "start_of_battle"):
             hero.start_of_battle(team, boss)
 
     round_summaries = []
     for round_num in range(1, 16):
+        for hero in team.heroes:
+            if hero.lifestar and hasattr(hero.lifestar, "start_of_round"):
+                hero.lifestar.start_of_round(hero, team, boss, round_num)
         for hero in team.heroes:
             if hero.lifestar and hasattr(hero.lifestar, "start_of_round"):
                 hero.lifestar.start_of_round(hero, team, boss, round_num)
@@ -179,12 +210,12 @@ async def debugfast(interaction: discord.Interaction):
     active_core = PDECore()
 
     data = [
-        ("hero_MFF_Hero", 11e9, 60e6, 3800, "MP", "UW", DB()),
-        ("hero_SQH_Hero", 12e9, 70e6, 3400, "MP", "UW", DB()),
-        ("hero_LFA_Hero", 20e9, 16e7, 3540, "MP", "BS", Antlers()),
-        ("hero_DGN_Hero", 14e9, 90e6, 3300, "MP", "UW", Scissors()),
-        ("hero_PDE_Hero", 9e9, 60e6, 2300, "MP", "UW", Mirror()),
-        ("hero_LBRM_Hero", 9.9e9, 50e6, 2000, "MP", "UW", Mirror())
+        ("hero_MFF_Hero", 11e9, 60e7, 3800, "MP", "UW", DB()),
+        ("hero_SQH_Hero", 12e9, 70e7, 3400, "MP", "UW", DB()),
+        ("hero_LFA_Hero", 20e9, 16e8, 3540, "CP", "BS", Antlers()),
+        ("hero_DGN_Hero", 14e9, 90e7, 3300, "MP", "UW", Scissors()),
+        ("hero_PDE_Hero", 9e9, 60e7, 2300, "MP", "UW", Mirror()),
+        ("hero_LBRM_Hero", 9.9e9, 50e7, 2000, "MP", "UW", Mirror())
     ]
 
     heroes = []
@@ -192,8 +223,6 @@ async def debugfast(interaction: discord.Interaction):
         lifestar = Specter() if hid == "hero_LFA_Hero" else None
         h = Hero.from_stats(hid, [hp, atk, spd], artifact=artifact, lifestar=lifestar)
         h.set_enables(purify_mapping.get(purify), trait_mapping.get(trait))
-        print(f"{h.name} Enable: {type(h.purify_enable).__name__}")
-
         h.gk = h.defier = True
         h.total_damage_dealt = 0
         h._damage_rounds = []
@@ -210,6 +239,9 @@ async def debugfast(interaction: discord.Interaction):
 
     round_summaries = []
     for round_num in range(1, 16):
+        for hero in team.heroes:
+            if hero.lifestar and hasattr(hero.lifestar, "start_of_round"):
+                hero.lifestar.start_of_round(hero, team, boss, round_num)
         if all(not h.is_alive() for h in team.heroes) or not boss.is_alive():
             break
 
@@ -219,6 +251,12 @@ async def debugfast(interaction: discord.Interaction):
         battle_logs = []
         battle_logs += team.perform_turn(boss, round_num)
         battle_logs += team.end_of_round(boss, round_num)
+
+        # Add calamity decay like simulate_battle
+        for h in team.heroes:
+            if h.is_alive() and h.calamity > 0:
+                h.calamity -= 1
+                round_summaries.append(f"🧼 {h.name} loses 1 Calamity at end of round. (Now {h.calamity})")
 
         for h in team.heroes:
             h.battle_logs = battle_logs
@@ -270,18 +308,7 @@ async def debugfast(interaction: discord.Interaction):
         percent = (dmg / team_total * 100) if team_total > 0 else 0
         label = f"**{h.name}**" if h == top_dmg_hero else h.name
 
-        offset_parts = []
-        total_offsets = 0
-        for source, attrs in h._curse_offsets_by_source_attr.items():
-            attr_parts = [f"{attr}:{count}" for attr, count in attrs.items()]
-            total = sum(attrs.values())
-            total_offsets += total
-            offset_parts.append(f"{source} → {', '.join(attr_parts)}")
-
-        curse_str = " | ".join(offset_parts) if offset_parts else "none"
-        lines.append(
-            f"{label:>6}: {dmg / 1e9:6.2f}B DMG | {energy:>3} ⚡ | {percent:>5.1f}% | \U0001f480 Curse Offsets: {total_offsets} ({curse_str})"
-        )
+        lines.append(f"{label:>6}: {dmg / 1e9:6.2f}B DMG | {energy:>3} ⚡ | {percent:>5.1f}%")
 
     message = "\n".join(lines + round_summaries)
     chunks = chunk_logs(message, limit=1900)
