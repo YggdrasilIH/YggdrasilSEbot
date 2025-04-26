@@ -1,43 +1,57 @@
 from game_logic.cores import active_core
 
-def apply_control_effect(hero, effect_name: str, rounds: int, boss=None, team=None):
+def apply_control_effect(hero, effects, *args, boss=None, team=None):
+    if args:
+        if not boss and len(args) > 0:
+            boss = args[0]
+        if not team and len(args) > 1:
+            team = args[1]
+
     logs = []
 
-    if active_core:
-        rounds = active_core.modify_control_duration(rounds)
+    if not isinstance(effects, list):
+        effects = [effects]
 
-    if hero.immune_control_effect != effect_name:
+    control_afflicted = []
+    boss_bonuses = []
+
+    for effect_name in effects:
+        if active_core:
+            duration = active_core.modify_control_duration(2)
+        else:
+            duration = 2
+
+        if hero.immune_control_effect == effect_name:
+            continue  # Skip logging Seal of Light immunity
+
         setattr(hero, f"has_{effect_name}", True)
-        setattr(hero, f"{effect_name}_rounds", rounds)
-        message = f"⚠️ {hero.name} is afflicted with {effect_name.replace('_', ' ').capitalize()} for {rounds} rounds."
-        logs.append(message)
+        setattr(hero, f"{effect_name}_rounds", duration)
+        control_afflicted.append(effect_name)
 
-        if boss:
-            logs.extend(boss.on_hero_controlled(hero, effect_name))
+        if boss and team:
+            if effect_name == "fear":
+                boss.hd += 50
+                boss_bonuses.append("+50 HD")
+            elif effect_name == "silence":
+                boss.energy += 50
+                boss_bonuses.append("+50 Energy")
 
-        # Teamwide reaction (e.g. LBRM energy-based cleanse)
-        if hasattr(hero, "team"):
-            for ally in hero.team.heroes:
-                if ally != hero and hasattr(ally, "on_control_afflicted"):
-                    logs.extend(ally.on_control_afflicted(hero, effect_name))
+    if control_afflicted:
+        control_list = " and ".join([effect.replace("_", " ").capitalize() for effect in control_afflicted])
+        logs.append(f"🔋 {hero.name} is controlled by {control_list} for {duration} rounds.")
 
-        # Self-cleansing via Wings
-        if getattr(hero, "extra_ctrl_removals", 0) > 0 and not getattr(hero, "has_seal_of_light", False):
-            logs.append(clear_control_effect(hero, effect_name))
-            hero.extra_ctrl_removals -= 1
-            if not getattr(hero, "wings_from_transition", False):
-                hero.energy += 30
-            logs.append(f"✨ {hero.name} removes {effect_name.replace('_', ' ').title()} using Wings.")
+    if boss_bonuses:
+        bonus_list = " and ".join(boss_bonuses)
+        logs.append(f"✨ Boss gains {bonus_list}.")
 
-        return "\n".join(logs)
-    else:
-        return f"🛡️ {hero.name} is immune to {effect_name.replace('_', ' ').capitalize()}."
+    return logs
 
 
 def clear_control_effect(hero, effect_name: str):
     setattr(hero, f"has_{effect_name}", False)
     setattr(hero, f"{effect_name}_rounds", 0)
     return f"🧹 {hero.name} has {effect_name.replace('_', ' ').capitalize()} removed."
+
 
 def add_calamity(hero, amount, logs, boss=None):
     previous = hero.calamity
@@ -52,9 +66,7 @@ def add_calamity(hero, amount, logs, boss=None):
         for effect in ["silence", "fear", "seal_of_light"]:
             if hero.immune_control_effect == effect:
                 logs.append(f"🛡️ {hero.name} is immune to {effect.replace('_', ' ').title()}.")
-                # Do not apply or clear — effect was never applied
             else:
-                logs.append(apply_control_effect(hero, effect, duration, boss=boss, team=hero.team if hasattr(hero, 'team') else None))
+                logs.extend(apply_control_effect(hero, effect, boss=boss, team=hero.team if hasattr(hero, 'team') else None))
 
-        logs.append(f"💀 {hero.name}'s control immunity reduced by 100.")
         hero.calamity = 0

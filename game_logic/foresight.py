@@ -1,6 +1,7 @@
 # game_logic/foresight.py
 
 import random
+from game_logic.buff_handler import BuffHandler
 
 def apply_foresight(hero, source):
     logs = []
@@ -10,24 +11,26 @@ def apply_foresight(hero, source):
         return logs
 
     if source == "basic":
-        hero.all_damage_dealt += 30
         hero.energy += 50
         key = f"foresight_basic_{random.randint(1000, 9999)}"
-        hero.apply_buff(key, {
+        BuffHandler.apply_buff(hero, key, {
             "attribute": "all_damage_dealt",
             "bonus": 30,
             "rounds": 15
         })
-        logs.append(f"{hero.name} gains Foresight (Basic): +30% damage for 15 rounds and +50 energy.")
+        logs.append(f"{hero.name} gains Foresight (Basic): +30% All Damage Dealt (15 rounds) and +50 Energy.")
 
     elif source == "active":
-        hero.crit_rate += 30
-        hero.crit_dmg += 100
-        hero.apply_buff("foresight_active", {
-            "crit_rate_increase": 30,
-            "crit_dmg_increase": 100,
+        BuffHandler.apply_buff(hero, "foresight_active_crit_rate", {
+            "attribute": "crit_rate",
+            "bonus": 30,
             "rounds": 2
         })
-        logs.append(f"{hero.name} gains Foresight (Active): +30% crit rate, +100% crit dmg.")
+        BuffHandler.apply_buff(hero, "foresight_active_crit_dmg", {
+            "attribute": "crit_dmg",
+            "bonus": 100,
+            "rounds": 2
+        })
+        logs.append(f"{hero.name} gains Foresight (Active): +30% Crit Rate and +100% Crit Damage (2 rounds).")
 
     return logs

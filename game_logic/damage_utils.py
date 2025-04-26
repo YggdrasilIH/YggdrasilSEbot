@@ -35,10 +35,8 @@ def hero_deal_damage(source, target, base_damage, is_active, team, allow_counter
         if ratio > 1:
             bonus_steps = floor((ratio - 1) / 0.10)
             gk = min(bonus_steps * 0.02, 1.0)
-            logs.append(f"🟢 {source.name} gains +{int(gk * 100)}% from Giant Killer.")
 
     defier = 0.30 if getattr(source, "defier", False) and target.hp >= 0.70 * target.max_hp else 0
-    if defier: logs.append(f"🟢 {source.name} gains +30% from Defier.")
 
     bs_bonus = 0
     if hasattr(source, "trait_enable") and hasattr(source.trait_enable, "apply_crit_bonus"):
@@ -55,16 +53,18 @@ def hero_deal_damage(source, target, base_damage, is_active, team, allow_counter
     phase2_multiplier = (1 + poison_bonus) * (1 + gk) * (1 + defier) * (1 + bs_bonus)
     damage = int(phase1 * phase2_multiplier)
 
-    if poison_bonus:
-        logs.append(f"🟢 {source.name} gains +{int(poison_bonus * 100)}% bonus from EF3 Poison.")
+    # Apply Abyssal Corruption bonus silently
+    if crit:
+        bonus = 0
+        for buff in getattr(target, "buffs", {}).values():
+            if isinstance(buff, dict) and buff.get("attribute") == "crit_damage_taken":
+                bonus += buff.get("bonus", 0)
+        if bonus:
+            damage = int(damage * (1 + bonus / 100))
 
-    # DR / ADR reduction
+    # DR / ADR reduction silently
     dr = min(getattr(target, "dr", 0), 0.75)
     adr = min(getattr(target, "adr", 0), 0.75)
-    if dr > 0:
-        logs.append(stylize_log("debuff", f"{target.name} reduces damage by {int(dr * 100)}% DR."))
-    if adr > 0:
-        logs.append(stylize_log("debuff", f"{target.name} reduces damage by {int(adr * 100)}% ADR."))
     damage *= (1 - dr)
     damage *= (1 - adr)
 
@@ -72,10 +72,8 @@ def hero_deal_damage(source, target, base_damage, is_active, team, allow_counter
     if target.shield > 0:
         if target.shield >= damage:
             target.shield -= damage
-            logs.append(f"🛡️ {target.name}'s shield absorbs {damage // 1_000_000}M damage.")
             damage = 0
         else:
-            logs.append(f"🛡️ {target.name}'s shield absorbs {target.shield // 1_000_000}M damage.")
             damage -= target.shield
             target.shield = 0
 

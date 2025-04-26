@@ -11,8 +11,16 @@ class LFA(Hero):
                          purify_enable, trait_enable, artifact, lifestar=lifestar)
         self.transition_power = 0
 
+    def add_or_update_buff(self, hero, buff_name, buff_data):
+        if buff_name in hero.buffs:
+            existing = hero.buffs[buff_name]
+            if "bonus" in buff_data:
+                existing["bonus"] += buff_data.get("bonus", 0)
+        else:
+            hero.apply_buff(buff_name, buff_data)
+
     def active_skill(self, boss, team):
-        logs = [f"✨ {self.name} uses Active Skill:"]
+        logs = []
         if self.has_silence:
             logs.append(f"{self.name} is silenced and cannot use active skill.")
             return logs
@@ -20,13 +28,11 @@ class LFA(Hero):
         base_hits = []
         crit_failed = False
 
-        # First 2 hits
         for _ in range(2):
             base_hits.append(self.atk * 12)
             if random.random() >= (self.crit_rate / 100):
                 crit_failed = True
 
-        # Conditional extra hits if boss is below 60%
         if boss.hp < boss.max_hp * 0.60:
             for _ in range(2):
                 base_hits.append(self.atk * 12)
@@ -37,7 +43,6 @@ class LFA(Hero):
             self.hp = min(self.max_hp, self.hp + heal_amt)
             logs.append(f"❤️ {self.name} heals for {heal_amt // 1_000_000}M HP from extra attacks.")
 
-        # Final pre-burst hit
         base_hits.append(self.atk * 12)
         if random.random() >= (self.crit_rate / 100):
             crit_failed = True
@@ -47,14 +52,11 @@ class LFA(Hero):
         logs.append(f"🔫 {self.name} unleashes {burst_damage // 1_000_000}M bonus burst damage.")
         total_damage += burst_damage
 
-        # Apply full damage in one call for proper phase 2 scaling
         logs.extend(hero_deal_damage(self, boss, total_damage, is_active=True, team=team, allow_counter=True, allow_crit=True))
 
-        # Balanced Strike override logic
         if hasattr(self.trait_enable, "override_crit_check"):
             self.trait_enable.override_crit_check(crit_failed)
 
-        # Apply ATK steal and debuff
         steal_amount = int(boss.atk * 0.30)
         logs.extend(BuffHandler.apply_debuff(boss, "lfa_atk_down_active", {
             "attribute": "atk", "bonus": -0.30, "rounds": 9999
@@ -74,9 +76,8 @@ class LFA(Hero):
 
         return logs
 
-
     def basic_attack(self, boss, team):
-        logs = [f"🔪 {self.name} uses Basic Attack:"]
+        logs = []
         if self.has_fear:
             logs.append(f"{self.name} is feared and cannot perform basic attack.")
             return logs
@@ -89,6 +90,9 @@ class LFA(Hero):
 
     def release_transition_skill(self, boss, team):
         logs = []
+        if self.has_seal_of_light:
+            return []
+
         if self.transition_power >= 12:
             self.transition_power -= 12
             logs.append(f"🔄 {self.name} activates Transition Skill (TP -12 → {self.transition_power}).")
@@ -122,3 +126,6 @@ class LFA(Hero):
             logs.append(f"✅ {self.name} gains +15 all_damage_dealt for 2 rounds.")
 
         return logs
+
+    def end_of_round(self, boss, team, round_num=None):
+        return super().end_of_round(boss, team, round_num)

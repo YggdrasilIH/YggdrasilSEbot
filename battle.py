@@ -3,6 +3,8 @@ from utils.log_utils import stylize_log
 
 DISCORD_MESSAGE_LIMIT = 1900
 
+CONTROL_EFFECTS = {"fear", "silence", "seal of light"}
+
 def detect_category(line):
     lowered = line.lower()
     if "energy" in lowered: return "energy"
@@ -42,6 +44,25 @@ def chunk_logs(log_block, limit=DISCORD_MESSAGE_LIMIT):
         chunks.append(current_chunk.strip())
     return chunks
 
+def group_control_effects(logs):
+    grouped = []
+    control_map = {}
+    
+    for line in logs:
+        if any(effect in line.lower() for effect in CONTROL_EFFECTS):
+            parts = line.split()
+            hero_name = parts[0]
+            for effect in CONTROL_EFFECTS:
+                if effect in line.lower():
+                    control_map.setdefault(hero_name, []).append(effect.title())
+        else:
+            grouped.append(line)
+
+    for hero, effects in control_map.items():
+        grouped.append(f"🔻 {hero} is controlled by {', '.join(effects)} (2 rounds).")
+
+    return grouped
+
 async def simulate_battle(interaction, team, boss, mode):
     all_logs = []
     battle_start_logs = []
@@ -64,46 +85,12 @@ async def simulate_battle(interaction, team, boss, mode):
     all_logs.extend(battle_start_logs)
 
     for round_num in range(1, 16):
-        for hero in team.heroes:
-            if hero.is_alive():
-                if hero.hp >= hero.max_hp * 0.5:
-                    hero.apply_buff("add_bonus_round", {"attribute": "all_damage_dealt", "bonus": 25, "rounds": 2})
-                    all_logs.append(f"✨ {hero.name}: +25% All Damage (2r).")
-                else:
-                    shield_value = int(hero.max_hp * 0.25)
-                    hero.shield += shield_value
-                    all_logs.append(f"🛡️ {hero.name}: +25% Max HP Shield ({shield_value}).")
-
-        for hero in team.heroes:
-            if not hasattr(hero, "half_hp_triggered"):
-                hero.half_hp_triggered = False
-            if hero.is_alive() and not hero.half_hp_triggered and hero.hp < hero.max_hp * 0.5:
-                hero.hp = hero.max_hp
-                hero.half_hp_triggered = True
-                all_logs.append(f"🩸 {hero.name}: Passive full HP restore (<50%).")
-
-        for hero in team.heroes:
-            if round_num == 1:
-                hero.adr_stack = getattr(hero, "adr_stack", 50)
-                hero.hd_stack = getattr(hero, "hd_stack", 10)
-                hero.ADR += hero.adr_stack
-                hero.hd += hero.hd_stack
-                all_logs.append(f"✨ {hero.name}: +50% ADR, +10 HD (Start).")
-            else:
-                if hasattr(hero, "adr_stack") and hero.adr_stack > 0:
-                    reduction = min(10, hero.adr_stack)
-                    hero.ADR -= reduction
-                    hero.adr_stack -= reduction
-                    all_logs.append(f"⬇️ {hero.name}: ADR -10% → {hero.adr_stack}%")
-                if hasattr(hero, "hd_stack"):
-                    hero.hd += 10
-                    hero.hd_stack += 10
-                    all_logs.append(f"⬆️ {hero.name}: HD +10 → {hero.hd_stack}")
-
         round_logs = [f"🔁 **Round {round_num}**"]
 
-        for status in team.status_descriptions():
-            round_logs.append(f"📊 Status:\n{status}")
+        statuses = team.status_descriptions()
+        if statuses:
+            round_logs.append("📊 Team Status:")
+            round_logs.extend(statuses)
 
         round_logs += team.perform_turn(boss, round_num)
 
@@ -111,6 +98,7 @@ async def simulate_battle(interaction, team, boss, mode):
             round_logs.append("❌ All heroes have fallen. Defeat!")
             all_logs.extend(round_logs)
             return all_logs
+
         if not boss.is_alive():
             round_logs.append("🏆 Boss defeated! Victory!")
             all_logs.extend(round_logs)
@@ -118,15 +106,13 @@ async def simulate_battle(interaction, team, boss, mode):
 
         round_logs += team.end_of_round(boss, round_num)
 
-        for hero in team.heroes:
-            if hero.is_alive() and hero.calamity > 0:
-                hero.calamity -= 1
-                round_logs.append(f"💀 {hero.name}: -1 Calamity → {hero.calamity}")
-
-        for status in team.status_descriptions():
-            round_logs.append(f"📉 Post-round Status:\n{status}")
+        statuses = team.status_descriptions()
+        if statuses:
+            round_logs.append("📉 Post-round Status:")
+            round_logs.extend(statuses)
 
         round_logs.append(f"💥 Boss HP: {int(boss.hp)} | 🏹 Total Damage: {int(boss.total_damage_taken)}")
+
         all_logs.extend(round_logs)
 
         if mode == "detailed":

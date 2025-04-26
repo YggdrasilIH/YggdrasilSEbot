@@ -302,10 +302,10 @@ class Hero:
         from .dgn import DGN
         hp, atk, spd = stats
         if hero_id == "hero_SQH_Hero":
-            hero = SQH("SQH", hp, atk, armor=4000, spd=spd, crit_rate=10, crit_dmg=150,
+            hero = SQH("SQH", hp, atk, armor=7000, spd=spd, crit_rate=10, crit_dmg=150,
                        ctrl_immunity=70, hd=0, precision=100, artifact=artifact, lifestar=lifestar)
         elif hero_id == "hero_LFA_Hero":
-            hero = LFA("LFA", hp, atk, armor=1200, spd=spd, crit_rate=20, crit_dmg=150,
+            hero = LFA("LFA", hp, atk, armor=4200, spd=spd, crit_rate=20, crit_dmg=150,
                        ctrl_immunity=70, hd=150, precision=150, artifact=artifact, lifestar=lifestar)
         elif hero_id == "hero_MFF_Hero":
             hero = MFF("MFF", hp, atk, armor=4000, spd=spd, crit_rate=8, crit_dmg=150,
@@ -314,13 +314,13 @@ class Hero:
             hero = ELY("ELY", hp, atk, armor=5000, spd=spd, crit_rate=9, crit_dmg=150,
                        ctrl_immunity=80, hd=0, precision=100, artifact=artifact, lifestar=lifestar)
         elif hero_id == "hero_PDE_Hero":
-            hero = PDE("PDE", hp, atk, armor=4000, spd=spd, crit_rate=11, crit_dmg=150,
+            hero = PDE("PDE", hp, atk, armor=9000, spd=spd, crit_rate=11, crit_dmg=150,
                        ctrl_immunity=125, hd=0, precision=100, artifact=artifact, lifestar=lifestar)
         elif hero_id == "hero_LBRM_Hero":
-            hero = LBRM("LBRM", hp, atk, armor=4000, spd=spd, crit_rate=10, crit_dmg=145,
+            hero = LBRM("LBRM", hp, atk, armor=7000, spd=spd, crit_rate=10, crit_dmg=145,
                         ctrl_immunity=130, hd=0, precision=100, artifact=artifact, lifestar=lifestar)
         elif hero_id == "hero_DGN_Hero":
-            hero = DGN("DGN", hp, atk, armor=4000, spd=spd, crit_rate=10, crit_dmg=150,
+            hero = DGN("DGN", hp, atk, armor=12000, spd=spd, crit_rate=10, crit_dmg=150,
                        ctrl_immunity=80, hd=0, precision=100, artifact=artifact, lifestar=lifestar)
         else:
             hero = cls("Default", hp, atk, armor=1000, spd=spd, crit_rate=10, crit_dmg=150,

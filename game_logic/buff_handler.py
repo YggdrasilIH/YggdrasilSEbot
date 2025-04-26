@@ -41,16 +41,34 @@ class BuffHandler:
 
         # Check if offsettable by Curse of Decay
         if BuffHandler.is_attribute_buff(buff_data) and hero.curse_of_decay > 0:
-            if boss:
-                damage = int(boss.atk * 30)
+            if boss and hasattr(boss, "apply_curse_of_decay_damage"):
+                cod_logs = []
+                boss.apply_curse_of_decay_damage(hero, cod_logs)
+                msg = f"💀 Curse of Decay offsets {buff_data['attribute']} buff on {hero.name}. " + " ".join(cod_logs)
+            else:
+                damage = int(boss.atk * 30) if boss else 0
                 hero.hp -= damage
                 msg = f"💀 Curse of Decay offsets {buff_data['attribute']} buff on {hero.name}. {hero.name} takes {damage / 1e6:.0f}M dmg."
-            else:
-                msg = f"💀 Curse of Decay offsets {buff_data['attribute']} buff on {hero.name}."
             hero.curse_of_decay -= 1
             return False, msg
 
-        hero.buffs[buff_name] = buff_data
+        # --- Stacking Logic ---
+        if buff_name in hero.buffs:
+            existing = hero.buffs[buff_name]
+            # If both old and new buffs have 'bonus', add them
+            if "bonus" in existing and "bonus" in buff_data:
+                existing["bonus"] += buff_data["bonus"]
+            # If both have 'heal_amount', add them
+            if "heal_amount" in existing and "heal_amount" in buff_data:
+                existing["heal_amount"] += buff_data["heal_amount"]
+            # If both have 'shield', add them
+            if "shield" in existing and "shield" in buff_data:
+                existing["shield"] += buff_data["shield"]
+            # Extend duration if incoming buff has longer remaining rounds
+            if "rounds" in existing and "rounds" in buff_data:
+                existing["rounds"] = max(existing["rounds"], buff_data["rounds"])
+        else:
+            hero.buffs[buff_name] = buff_data
 
         # Apply immediate impact for all_damage_dealt
         if attr == "all_damage_dealt":
@@ -79,7 +97,6 @@ class BuffHandler:
             hero.crit_dmg = 150
             logs.append(f"📊 {hero.name}: Crit DMG capped at 150")
         return logs
-
 
 def grant_energy(hero, amount: int) -> str:
     hero.energy += amount

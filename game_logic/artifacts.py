@@ -1,6 +1,7 @@
 # game_logic/artifacts.py
 import random
 from game_logic.buff_handler import BuffHandler
+from utils.log_utils import group_team_buffs
 
 def stylize_log(category, message):
     icons = {
@@ -20,52 +21,67 @@ class Artifact:
         pass
 
     def apply_end_of_round(self, hero, team, boss, round_num):
-        if hero.has_seal_of_light:
-            return [stylize_log("info", f"{hero.name}'s Mirror effect is sealed and does nothing.")]
         return []
 
 class Scissors(Artifact):
     def bind_team(self, team):
         self.team = team
+
     def apply_end_of_round(self, hero, team, boss, round_num):
         replicated_msgs = []
-        if hasattr(boss, "attribute_effects"):
-            effects = boss.attribute_effects[-2:]
-            for effect in effects:
-                if hero.has_seal_of_light:
-                    continue  # Artifact suppressed by Seal of Light on wearer
+        if hero.has_seal_of_light:
+            return replicated_msgs
+
+        # Replicate Boss HD
+        if boss.hd > 0:
+            scaled_hd = int(boss.hd * 0.3)
             for target in team.get_line(hero):
-                scaled_bonus = int(effect.get("value", 0) * 0.3)
-                target.apply_buff(f"scissors_{effect['name']}_{round_num}", {
-                    "attribute": effect.get("attribute"),
-                    "bonus": scaled_bonus,
-                    "rounds": effect.get("rounds", 1)
+                target.apply_buff(f"scissors_hd_{hero.name}_{round_num}", {
+                    "attribute": "hd",
+                    "bonus": scaled_hd,
+                    "rounds": 15  # Boss Fear HD buffs last 15 rounds → we match that
                 })
-                replicated_msgs.append(stylize_log("buff", f"{target.name} replicates {effect['name']} from boss (Scissors)."))
+                replicated_msgs.append(stylize_log("buff", f"{target.name} replicates {scaled_hd} HD from Boss (Scissors)."))
+
+        # Replicate Boss ATK (optional)
+        if boss.atk > 0:
+            scaled_atk = int(boss.atk * 0.3)
+            for target in team.get_line(hero):
+                target.apply_buff(f"scissors_atk_{hero.name}_{round_num}", {
+                    "attribute": "atk",
+                    "bonus": scaled_atk,
+                    "rounds": 9999  # Boss ATK buff is permanent stacking
+                })
+                replicated_msgs.append(stylize_log("buff", f"{target.name} replicates {scaled_atk} ATK from Boss (Scissors)."))
+
         return replicated_msgs
+
 
 class DB(Artifact):
     def on_active_skill(self, team, boss):
         logs = []
-        for hero in team.heroes:
-            # Attempt to apply energy, blockable by Curse
-            if hero.curse_of_decay > 0:
-                hero.curse_of_decay -= 1
-                damage = boss.atk * 30
-                hero.hp -= damage
-                if hero.hp < 0:
-                    hero.hp = 0
-                logs.append(f"💀 Curse of Decay offsets energy buff on {hero.name}. Takes {int(damage):,} damage. (1 layer removed)")
-            else:
-                hero.energy += 20
-                logs.append(f"⚡ {hero.name} gains +20 energy from DB (direct).")
+        buffs_applied = []
+        if hasattr(team, "heroes"):
+            for hero in team.heroes:
+                if hero.has_seal_of_light:
+                    continue
+                if hero.curse_of_decay > 0:
+                    hero.curse_of_decay -= 1
+                    damage = boss.atk * 30
+                    hero.hp -= damage
+                    if hero.hp < 0:
+                        hero.hp = 0
+                    logs.append(f"💀 Curse of Decay offsets energy buff on {hero.name}. Takes {int(damage):,} damage. (1 layer removed)")
+                else:
+                    hero.energy += 20
+                    buffs_applied.append((hero.name, "+20 Energy (DB)"))
+                    if random.random() < 0.5:
+                        hero.energy += 10
+                        buffs_applied.append((hero.name, "+10 Bonus Energy (DB)"))
 
-                # 50% chance to gain +10 more
-                import random
-                if random.random() < 0.5:
-                    hero.energy += 10
-                    logs.append(f"⚡ {hero.name} gains an extra +10 energy from DB (direct).")
-
+        if buffs_applied:
+            logs.append("🔶 DB Energy Gains:")
+            logs.extend(group_team_buffs(buffs_applied))
         return logs
 
 class Mirror(Artifact):
@@ -75,8 +91,11 @@ class Mirror(Artifact):
 
     def apply_end_of_round(self, hero, team, boss, round_num):
         msgs = []
+        buffs_applied = []
 
-        # Curse interaction (blockable energy gain)
+        if hero.has_seal_of_light:
+            return [stylize_log("info", f"{hero.name}'s Mirror effect is sealed and does nothing.")]
+
         if hero.curse_of_decay > 0:
             hero.curse_of_decay -= 1
             damage = boss.atk * 30
@@ -86,26 +105,39 @@ class Mirror(Artifact):
             msgs.append(f"💀 Curse of Decay offsets energy buff on {hero.name}. Takes {int(damage):,} damage. (1 layer removed)")
         else:
             hero.energy += 15
-            msgs.append(stylize_log("energy", f"{hero.name} gains +15 energy from Mirror."))
+            buffs_applied.append((hero.name, "+15 Energy (Mirror)"))
 
-        # Apply all_damage_dealt bonus every 3 rounds
         if round_num - self.last_trigger_round >= 3:
             self.last_trigger_round = round_num
             self.bonus = 4.5
             for h in team.heroes:
-                h.all_damage_dealt += self.bonus
-                msgs.append(stylize_log("buff", f"{h.name} gains {self.bonus:.1f}% all damage from Mirror."))
+                BuffHandler.apply_buff(h, f"mirror_damage_bonus_{round_num}", {
+                    "attribute": "all_damage_dealt",
+                    "bonus": self.bonus,
+                    "rounds": 3
+                }, boss)
+                buffs_applied.append((h.name, f"+{self.bonus:.1f}% All Damage (Mirror)"))
         else:
             self.bonus -= 1.5
 
-        return msgs
+        if buffs_applied:
+            msgs.append("🔷 Mirror Buffs:")
+            msgs.extend(group_team_buffs(buffs_applied))
 
+        return msgs
 
 class Antlers(Artifact):
     def apply_end_of_round(self, hero, team, boss, round_num):
+        if hero.has_seal_of_light:
+            return [stylize_log("info", f"{hero.name}'s Antlers effect is sealed and does nothing.")]
+
         if not hasattr(hero, "antler_stacks"):
             hero.antler_stacks = 0
         hero.antler_stacks += 1
         bonus = 9 * hero.antler_stacks
-        hero.all_damage_dealt += 9
+        BuffHandler.apply_buff(hero, f"antlers_bonus_{hero.antler_stacks}", {
+            "attribute": "all_damage_dealt",
+            "bonus": 9,
+            "rounds": 9999
+        }, boss)
         return [stylize_log("buff", f"{hero.name} gains +9% all damage from Antlers (Total: {bonus}%).")]

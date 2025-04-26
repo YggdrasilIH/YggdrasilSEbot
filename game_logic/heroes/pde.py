@@ -3,6 +3,7 @@ import random
 from game_logic.damage_utils import hero_deal_damage
 from game_logic.buff_handler import BuffHandler
 from game_logic.control_effects import clear_control_effect
+from utils.log_utils import group_team_buffs
 
 class PDE(Hero):
     def __init__(self, name, hp, atk, armor, spd, crit_rate, crit_dmg, ctrl_immunity, hd, precision,
@@ -13,37 +14,56 @@ class PDE(Hero):
         self.energy = 0
         self.triggered_this_round = False
 
+    def add_or_update_buff(self, hero, buff_name, buff_data):
+        if buff_name in hero.buffs:
+            existing = hero.buffs[buff_name]
+            if "layers" in buff_data:
+                existing["layers"] += buff_data.get("layers", 0)
+            if "bonus" in buff_data:
+                existing["bonus"] += buff_data.get("bonus", 0)
+            if "heal_amount" in buff_data:
+                existing["heal_amount"] += buff_data.get("heal_amount", 0)
+        else:
+            hero.apply_buff(buff_name, buff_data)
+
     def active_skill(self, boss, team):
         logs = []
-        logs.append(f"{self.name} begins active skill.")
         if self.has_silence:
             logs.append(f"{self.name} is silenced and cannot use active skill.")
             return logs
         logs.extend(hero_deal_damage(self, boss, self.atk * 20, is_active=True, team=team))
         logs.append(f"{self.name} reduces {boss.name}'s energy by 50.")
         boss.energy = max(boss.energy - 50, 0)
+
+        grant_logs = []
         for ally in team.back_line:
-            ally.apply_buff("mystical_veil", {"layers": 2, "rounds": 9999})
-            ally.apply_buff("regen", {"heal_amount": int(self.atk * 5), "rounds": 2})
-            logs.append(f"{self.name} grants mystical veil and regen to {ally.name}.")
+            self.add_or_update_buff(ally, "mystical_veil", {"layers": 2, "rounds": 9999})
+            self.add_or_update_buff(ally, "regen", {"heal_amount": int(self.atk * 5), "rounds": 2})
+            grant_logs.append(f"{ally.name}: Mystical Veil + Regen")
+        if grant_logs:
+            logs.append(f"✨ PDE grants: {', '.join(grant_logs)}")
         return logs
 
     def basic_attack(self, boss, team):
         logs = []
-        logs.append(f"{self.name} begins basic attack.")
         if self.has_fear:
             logs.append(f"{self.name} is feared and fails basic attack.")
             return logs
         logs.extend(hero_deal_damage(self, boss, self.atk * 20, is_active=False, team=team))
-        logs.append(f"{self.name} executes basic attack.")
         target = min([h for h in team.heroes if h.is_alive()], key=lambda h: h.hp, default=self)
-        target.apply_buff("mystical_veil", {"layers": 1, "rounds": 9999})
-        target.apply_buff("regen", {"heal_amount": int(self.atk * 12), "rounds": 2})
-        logs.append(f"{self.name} grants mystical veil and regen to {target.name}.")
+
+        self.add_or_update_buff(target, "mystical_veil", {"layers": 1, "rounds": 9999})
+        self.add_or_update_buff(target, "regen", {"heal_amount": int(self.atk * 12), "rounds": 2})
+        logs.append(f"✨ PDE grants to {target.name}: Mystical Veil + Regen")
         return logs
 
     def passive_trigger(self, allies, boss, team):
+        if self.has_seal_of_light:
+            return []  # Passive blocked by Seal of Light
         logs = []
+        cleanse_logs = []
+        buff_logs = []
+
         controlled = [h for h in allies if h.is_alive() and (h.has_fear or h.has_silence or h.has_seal_of_light)]
         to_cleanse = controlled[:2]
 
@@ -59,22 +79,30 @@ class PDE(Hero):
             if effects:
                 chosen = random.choice(effects)
                 logs.append(clear_control_effect(h, chosen))
-                logs.append(f"{self.name} removes {chosen.replace('_', ' ').title()} from {h.name}.")
+                cleanse_logs.append(f"{h.name}: Cleansed {chosen.replace('_', ' ').title()}")
 
         for h in controlled:
             if h not in to_cleanse:
-                logs.extend(BuffHandler.apply_buff(h, "control_resist", {
+                BuffHandler.apply_buff(h, "control_resist", {
                     "attribute": "control_immunity", "bonus": 15, "rounds": 3
-                }, boss))
-                logs.append(f"{self.name} grants +15% Control Immunity to {h.name}.")
+                }, boss)
+                buff_logs.append(f"{h.name}: +15% Control Immunity")
 
-        logs.extend(BuffHandler.apply_debuff(boss, "speed_down", {
+        BuffHandler.apply_debuff(boss, "speed_down", {
             "attribute": "spd", "bonus": -12, "rounds": 2
-        }))
+        })
         logs.append(f"{self.name} reduces {boss.name}'s speed by 12 for 2 rounds.")
+
+        if cleanse_logs:
+            logs.append("🧹 PDE cleanses: " + ", ".join(cleanse_logs))
+        if buff_logs:
+            logs.append("✨ PDE buffs: " + ", ".join(buff_logs))
+
         return logs
 
     def on_receive_damage(self, attacker, team, attack_type):
+        if self.has_seal_of_light:
+            return []  # Passive blocked by Seal of Light
         logs = []
         if attack_type.lower() in ["basic", "active"]:
             if self.transition_power >= 3:
@@ -88,41 +116,46 @@ class PDE(Hero):
         return logs
 
     def release_transition_skill(self, team, tp_before_release, boss):
-        logs = []
-        if tp_before_release >= 18:
-            self.transition_power -= 18
-            logs.append(f"{self.name} consumes all 18 TP to release full Transition Skill.")
-        else:
-            logs.append(f"{self.name} releases Transition Skill (no TP consumed).")
-        target = min([h for h in team.heroes if h.is_alive()], key=lambda h: h.hp, default=self)
+            logs = []
+            if tp_before_release >= 18:
+                self.transition_power -= 18
+                logs.append(f"{self.name} consumes all 18 TP to release full Transition Skill.")
+            else:
+                logs.append(f"{self.name} releases Transition Skill (no TP consumed).")
 
-        self.apply_buff("mystical_veil", {"layers": 1, "rounds": 2})
-        target.apply_buff("mystical_veil", {"layers": 1, "rounds": 2})
-        logs.append(f"{self.name} and {target.name} receive 1 layer of Mystical Veil for 2 rounds.")
+            target = min([h for h in team.heroes if h.is_alive()], key=lambda h: h.hp, default=self)
+            self.add_or_update_buff(self, "mystical_veil", {"layers": 1, "rounds": 2})
+            self.add_or_update_buff(target, "mystical_veil", {"layers": 1, "rounds": 2})
+            logs.append(f"✨ PDE grants Mystical Veil: {self.name} & {target.name}")
 
-        heal_amt = int(self.atk * 12)
-        self.hp = min(self.max_hp, self.hp + heal_amt)
-        target.hp = min(target.max_hp, target.hp + heal_amt)
-        logs.append(f"{self.name} and {target.name} are healed for {heal_amt // 1_000_000}M HP each.")
+            heal_amt = int(self.atk * 12)
+            self.hp = min(self.max_hp, self.hp + heal_amt)
+            target.hp = min(target.max_hp, target.hp + heal_amt)
+            logs.append(f"🩹 PDE heals: {self.name} & {target.name} for {heal_amt // 1_000_000}M each.")
 
-        for hero in team.back_line:
-            BuffHandler.apply_buff(hero, "hd_up", {"attribute": "hd", "bonus": 10, "rounds": 2}, boss)
-            logs.append(f"{hero.name} receives +10% HD for 2 rounds.")
-
-        highest = max(team.heroes, key=lambda h: h.atk)
-        BuffHandler.apply_buff(highest, "dmg_up", {"attribute": "all_damage_dealt", "bonus": 15, "rounds": 2}, boss)
-        logs.append(f"{highest.name} receives +15% damage for 2 rounds.")
-
-        if tp_before_release >= 6:
-            boss.apply_buff("atk_down", {"value": 0.20, "rounds": 2})
-            logs.append(f"{boss.name}'s attack is reduced by 20% for 2 rounds.")
+            buffs_applied = []
             for hero in team.back_line:
-                BuffHandler.apply_buff(hero, "all_dmg_up", {"attribute": "all_damage_dealt", "bonus": 20, "rounds": 3}, boss)
-                logs.append(f"{hero.name} receives +20% all damage for 3 rounds.")
+                BuffHandler.apply_buff(hero, "hd_up", {"attribute": "hd", "bonus": 10, "rounds": 2}, boss)
+                buffs_applied.append((hero.name, "+10% HD"))
 
-        return logs
+            highest = max(team.heroes, key=lambda h: h.atk)
+            BuffHandler.apply_buff(highest, "dmg_up", {"attribute": "all_damage_dealt", "bonus": 15, "rounds": 2}, boss)
+            buffs_applied.append((highest.name, "+15% All Damage Dealt"))
+
+            if tp_before_release >= 6:
+                boss.apply_buff("atk_down", {"value": 0.20, "rounds": 2})
+                logs.append(f"🔻 {boss.name}'s attack reduced by 20% for 2 rounds.")
+                for hero in team.back_line:
+                    BuffHandler.apply_buff(hero, "all_dmg_up", {"attribute": "all_damage_dealt", "bonus": 20, "rounds": 3}, boss)
+                    buffs_applied.append((hero.name, "+20% All Damage Dealt"))
+
+            if buffs_applied:
+                logs.append("✨ PDE Buffs Applied:")
+                logs.extend(group_team_buffs(buffs_applied))
+
+            return logs
 
     def end_of_round(self, boss, team, round_num=None):
         logs = super().end_of_round(boss, team, round_num)
         self.triggered_this_round = False
-        return []
+        return logs

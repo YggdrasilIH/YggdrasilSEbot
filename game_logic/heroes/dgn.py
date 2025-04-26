@@ -1,6 +1,7 @@
 from .base import Hero
 from game_logic.damage_utils import hero_deal_damage
 from game_logic.buff_handler import BuffHandler
+from utils.log_utils import group_team_buffs
 import random
 
 class DGN(Hero):
@@ -29,7 +30,7 @@ class DGN(Hero):
         return logs
 
     def active_skill(self, boss, team):
-        logs = [f"{self.name} begins active skill."]
+        logs = []
         if self.has_silence:
             logs.append(f"{self.name} is silenced and cannot use active skill.")
             return logs
@@ -49,6 +50,7 @@ class DGN(Hero):
                 ally.hp -= aoe
                 logs.append(f"{self.name} deals {self.format_damage_log(aoe)} AOE damage to {ally.name} (Undying Shadow).")
 
+        buffs_applied = []
         for h in [self] + [a for a in team.heroes if getattr(a, "bright_blessing", False) and a != self]:
             h.apply_buff("gg_atk", {"attribute": "atk", "bonus": int(h.atk * 0.16), "rounds": 2})
             h.apply_buff("gg_hd", {"attribute": "hd", "bonus": 20, "rounds": 2})
@@ -56,14 +58,18 @@ class DGN(Hero):
             h.apply_buff("gg_cd", {"attribute": "crit_dmg", "bonus": 20, "rounds": 2})
             heal = int(h.max_hp * 0.18)
             h.hp = min(h.max_hp, h.hp + heal)
-            logs.append(f"{self.name} grants Guiding Glow to {h.name} for 2 rounds and heals {heal} HP.")
+            buffs_applied.append((h.name, "Guiding Glow buffs + Heal"))
+
+        if buffs_applied:
+            logs.append("✨ Guiding Glow Buffs Applied:")
+            logs.extend(group_team_buffs(buffs_applied))
 
         self.transition_power += 6
         logs.append(f"{self.name} gains 6 TP from active skill (TP now: {self.transition_power}).")
         return logs
 
     def basic_attack(self, boss, team):
-        logs = [f"{self.name} begins basic attack."]
+        logs = []
         if self.has_fear:
             logs.append(f"{self.name} is feared and cannot perform basic attack.")
             return logs
@@ -77,9 +83,10 @@ class DGN(Hero):
 
         total = self.atk * 12 + bonus
         shield = int(total * 0.5)
+        buffs_applied = []
         for h in [self] + [a for a in team.heroes if getattr(a, "bright_blessing", False) and a != self]:
             h.shield += shield
-            logs.append(f"{self.name} grants {self.format_damage_log(shield)} shield to {h.name}.")
+            buffs_applied.append((h.name, f"+{self.format_damage_log(shield)} Shield"))
 
         buffs = [(n, b) for n, b in self.buffs.items() if BuffHandler.is_attribute_buff(b)]
         replicate = random.sample(buffs, min(2, len(buffs)))
@@ -87,7 +94,11 @@ class DGN(Hero):
             if getattr(ally, "bright_blessing", False):
                 for name, buff in replicate:
                     ally.apply_buff(f"replicated_{name}", buff.copy())
-                    logs.append(f"{self.name} replicates {name} to {ally.name}.")
+                    buffs_applied.append((ally.name, f"Replicated {name}"))
+
+        if buffs_applied:
+            logs.append("✨ Basic Attack Buffs Applied:")
+            logs.extend(group_team_buffs(buffs_applied))
 
         boss.apply_buff("armor_down", {"attribute": "armor", "bonus": -0.18, "rounds": 2})
         boss.apply_buff("block_down", {"attribute": "block", "bonus": -0.18, "rounds": 2})
@@ -104,6 +115,8 @@ class DGN(Hero):
         return logs
 
     def end_of_round(self, boss, team, round_num=None):
+        if self.has_seal_of_light:
+            return super().end_of_round(boss, team, round_num)
         logs = super().end_of_round(boss, team, round_num)
         if self.transition_power < 12:
             return logs
@@ -135,21 +148,28 @@ class DGN(Hero):
             del top_enemy.buffs[removed]
             logs.append(f"{self.name} removes buff '{removed}' from {top_enemy.name}.")
 
+        buffs_applied = []
         for ally in team.heroes:
             applied, msg = BuffHandler.apply_buff(ally, "transition_crit_dmg_up", {"attribute": "crit_dmg", "bonus": 50, "rounds": 2}, boss)
             if applied:
-                logs.append(f"{ally.name} gains +50% Crit Damage for 2 rounds from {self.name}'s transition skill.")
+                buffs_applied.append((ally.name, "+50% Crit Damage (2 rounds)"))
             elif msg:
                 logs.append(msg)
+
+        if buffs_applied:
+            logs.append("✨ Transition Buffs Applied:")
+            logs.extend(group_team_buffs(buffs_applied))
 
         if random.random() < 0.5:
             for ally in team.heroes:
                 ally.energy += 20
-                logs.append(f"{ally.name} gains +20 energy from {self.name}'s transition skill.")
+            logs.append("⚡ All allies gain +20 Energy.")
 
         return logs
 
     def on_receive_damage(self, damage, team, source):
+        if self.has_seal_of_light:
+            return []
         logs = []
         if getattr(source, "is_alive", lambda: False)() and hasattr(damage, "source_type") and damage.source_type in ["basic", "active"]:
             logs.append(f"{self.name} retaliates against {source.name} for using {damage.source_type} skill.")
