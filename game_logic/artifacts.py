@@ -80,7 +80,6 @@ class DB(Artifact):
                         buffs_applied.append((hero.name, "+10 Bonus Energy (DB)"))
 
         if buffs_applied:
-            logs.append("🔶 DB Energy Gains:")
             logs.extend(group_team_buffs(buffs_applied))
         return logs
 
@@ -121,7 +120,6 @@ class Mirror(Artifact):
             self.bonus -= 1.5
 
         if buffs_applied:
-            msgs.append("🔷 Mirror Buffs:")
             msgs.extend(group_team_buffs(buffs_applied))
 
         return msgs

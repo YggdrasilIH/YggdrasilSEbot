@@ -59,14 +59,15 @@ def add_calamity(hero, amount, logs, boss=None):
     if previous < 5 and hero.calamity >= 5:
         original_immunity = getattr(hero, 'original_ctrl_immunity', 100)
         hero.ctrl_immunity = max(hero.ctrl_immunity, max(0, original_immunity - 100))
-        duration = 2
-        if active_core:
-            duration = active_core.modify_control_duration(duration)
 
+        effects_to_apply = []
         for effect in ["silence", "fear", "seal_of_light"]:
             if hero.immune_control_effect == effect:
                 logs.append(f"🛡️ {hero.name} is immune to {effect.replace('_', ' ').title()}.")
             else:
-                logs.extend(apply_control_effect(hero, effect, boss=boss, team=hero.team if hasattr(hero, 'team') else None))
+                effects_to_apply.append(effect)
+
+        if effects_to_apply:
+            logs.extend(apply_control_effect(hero, effects_to_apply, boss=boss, team=hero.team if hasattr(hero, 'team') else None))
 
         hero.calamity = 0

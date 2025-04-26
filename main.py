@@ -252,12 +252,6 @@ async def debugfast(interaction: discord.Interaction):
         battle_logs += team.perform_turn(boss, round_num)
         battle_logs += team.end_of_round(boss, round_num)
 
-        # Add calamity decay like simulate_battle
-        for h in team.heroes:
-            if h.is_alive() and h.calamity > 0:
-                h.calamity -= 1
-                round_summaries.append(f"🧼 {h.name} loses 1 Calamity at end of round. (Now {h.calamity})")
-
         for h in team.heroes:
             h.battle_logs = battle_logs
 

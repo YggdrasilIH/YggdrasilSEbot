@@ -81,6 +81,7 @@ class Team:
         for hero in self.heroes:
             if hero.is_alive():
                 if hero.energy >= 100 and not hero.has_silence:
+                    hero._using_real_attack = True
                     skill_logs = hero.active_skill(boss, self)
                     buffs_applied = []
                     for ally in self.heroes:
@@ -102,7 +103,9 @@ class Team:
 
                     crit_occurred = any("CRIT" in str(line) for line in skill_logs)
                     self.energy_gain_on_being_hit(boss, logs, crit_occurred)
+                    hero._using_real_attack = False
                 else:
+                    hero._using_real_attack = True
                     skill_logs = hero.basic_attack(boss, self)
                     logs.extend(skill_logs)
                     if hero.lifestar and hasattr(hero.lifestar, "on_after_action"):
@@ -113,9 +116,9 @@ class Team:
 
                     crit_occurred = any("CRIT" in str(line) for line in skill_logs)
                     self.energy_gain_on_being_hit(boss, logs, crit_occurred)
+                    hero._using_real_attack = False
 
-        logs.append(f"🔥 Boss takes its turn.")
-        boss_logs = boss.active_skill(self.heroes, round_num) + boss.basic_attack(self.heroes, round_num) + boss.counterattack(self.heroes)
+        boss_logs = boss.boss_action(self.heroes, round_num)
         logs.extend(boss_logs)
 
         crit_hit_heroes = [h for h in self.heroes if h.is_alive()]
@@ -193,7 +196,10 @@ class Team:
             logs.extend(group_team_buffs(buffs_applied))
 
         logs.extend(boss.end_of_round_effects(self.heroes, round_num))
-        logs.append(f"🧠 Boss and team end-of-round effects completed.")
+        for hero in self.heroes:
+            if hero.is_alive() and hero.calamity > 0:
+                hero.calamity -= 1
+
         return logs
 
     def status_descriptions(self):
