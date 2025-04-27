@@ -66,7 +66,25 @@ class DGN(Hero):
 
         self.transition_power += 6
         logs.append(f"{self.name} gains 6 TP from active skill (TP now: {self.transition_power}).")
+
+        # Replicate debuffs from self to boss
+        debuffs = [
+            (n, b) for n, b in self.buffs.items()
+            if BuffHandler.is_attribute_reduction(b, strict=True)
+            and not n.startswith("gg_")
+            and "_self" not in n
+        ]
+
+        if debuffs:
+            replicate = random.sample(debuffs, min(2, len(debuffs)))
+            for name, debuff in replicate:
+                boss.apply_buff(f"replicated_{name}", debuff.copy())
+                logs.append(f"🔁 {self.name} replicates debuff '{name}' to {boss.name}.")
+        else:
+            logs.append(f"⚠️ {self.name} had no valid attribute debuffs to replicate.")
+
         return logs
+
 
     def basic_attack(self, boss, team):
         logs = []
@@ -84,17 +102,28 @@ class DGN(Hero):
         total = self.atk * 12 + bonus
         shield = int(total * 0.5)
         buffs_applied = []
-        for h in [self] + [a for a in team.heroes if getattr(a, "bright_blessing", False) and a != self]:
-            h.shield += shield
-            buffs_applied.append((h.name, f"+{self.format_damage_log(shield)} Shield"))
 
-        buffs = [(n, b) for n, b in self.buffs.items() if BuffHandler.is_attribute_buff(b)]
-        replicate = random.sample(buffs, min(2, len(buffs)))
-        for ally in team.heroes:
-            if getattr(ally, "bright_blessing", False):
-                for name, buff in replicate:
-                    ally.apply_buff(f"replicated_{name}", buff.copy())
-                    buffs_applied.append((ally.name, f"Replicated {name}"))
+        for h in team.heroes:
+            if getattr(h, "bright_blessing", False) and h.is_alive():
+                h.shield += shield
+                buffs_applied.append((h.name, f"+{self.format_damage_log(shield)} Shield"))
+
+        buffs = [
+            (n, b) for n, b in self.buffs.items()
+            if BuffHandler.is_attribute_buff(b, strict=True)
+            and not n.startswith("gg_")
+            and "_self" not in n
+        ]
+
+        if buffs:
+            replicate = random.sample(buffs, min(2, len(buffs)))
+            for ally in team.heroes:
+                if getattr(ally, "bright_blessing", False) and ally.is_alive():
+                    for name, buff in replicate:
+                        ally.apply_buff(f"replicated_{name}", buff.copy())
+                        buffs_applied.append((ally.name, f"Replicated {name}"))
+        else:
+            logs.append(f"⚠️ {self.name} had no valid attribute buffs to replicate.")
 
         if buffs_applied:
             logs.append("✨ Basic Attack Buffs Applied:")
@@ -104,15 +133,17 @@ class DGN(Hero):
         boss.apply_buff("block_down", {"attribute": "block", "bonus": -0.18, "rounds": 2})
         logs.append(f"{self.name} reduces {boss.name}'s Armor and Block by 18% for 2 rounds.")
 
-        for h in [self] + [a for a in team.heroes if getattr(a, "bright_blessing", False) and a != self]:
-            if random.random() < 0.5:
-                reducible = [(n, b) for n, b in h.buffs.items() if BuffHandler.is_attribute_reduction(b)]
-                if reducible:
-                    to_remove = random.choice(reducible)
-                    del h.buffs[to_remove[0]]
-                    logs.append(f"{self.name} removes attribute reduction '{to_remove[0]}' from {h.name}.")
+        for h in team.heroes:
+            if getattr(h, "bright_blessing", False) and h.is_alive():
+                if random.random() < 0.5:
+                    reducible = [(n, b) for n, b in h.buffs.items() if BuffHandler.is_attribute_reduction(b, strict=True)]
+                    if reducible:
+                        to_remove = random.choice(reducible)
+                        del h.buffs[to_remove[0]]
+                        logs.append(f"{self.name} removes attribute reduction '{to_remove[0]}' from {h.name}.")
 
         return logs
+
 
     def end_of_round(self, boss, team, round_num=None):
         if self.has_seal_of_light:
@@ -125,32 +156,48 @@ class DGN(Hero):
         logs.append(f"{self.name} consumes 12 TP to trigger FULL transition skill.")
 
         targets = [boss] if not hasattr(boss, "heroes") else boss.heroes
-        for enemy in targets:
-            enemy.apply_buff("full_atk_down", {"attribute": "atk", "bonus": -0.5, "rounds": 3})
-            enemy.apply_buff("full_crit_down", {"attribute": "crit_rate", "bonus": -0.5, "rounds": 3})
-            enemy.apply_buff("full_ctrl_immunity_down", {"attribute": "control_immunity", "bonus": -0.5, "rounds": 3})
-            logs.append(f"{enemy.name} receives -50% ATK, -50% Crit Rate, -50% Control Immunity for 3 rounds.")
 
-            debuff_count = sum(1 for b in enemy.buffs.values() if isinstance(b, dict))
+        for enemy in targets:
+            # Correct debuff applications: -50% ATK, Crit Rate, Control Immunity
+            BuffHandler.apply_buff(enemy, "full_atk_down", {
+                "attribute": "atk", "bonus": -int(enemy.atk * 0.5), "rounds": 3
+            })
+            BuffHandler.apply_buff(enemy, "full_crit_down", {
+                "attribute": "crit_rate", "bonus": -50, "rounds": 3
+            })
+            BuffHandler.apply_buff(enemy, "full_ctrl_immunity_down", {
+                "attribute": "control_immunity", "bonus": -50, "rounds": 3
+            })
+            logs.append(f"{enemy.name} receives -50% ATK, -50 Crit Rate, -50 Control Immunity for 3 rounds.")
+
+            # Correctly count only debuffs
+            debuff_count = sum(1 for b in enemy.buffs.values() if isinstance(b, dict) and BuffHandler.is_attribute_reduction(b, strict=True))
             bonus = self.atk * 20 * debuff_count
             logs.extend(hero_deal_damage(self, enemy, bonus, is_active=True, team=team, allow_counter=False, allow_crit=False))
 
+        # Bonus damage based on target debuffs
         target = min(targets, key=lambda e: e.hp if e.is_alive() else float('inf'))
         if target and target.is_alive():
-            count = sum(1 for b in target.buffs.values() if isinstance(b, dict))
+            count = sum(1 for b in target.buffs.values() if isinstance(b, dict) and BuffHandler.is_attribute_reduction(b, strict=True))
             bonus = self.atk * 6 * count
             logs.extend(hero_deal_damage(self, target, bonus, is_active=True, team=team, allow_counter=False, allow_crit=False))
 
+        # Correct buff removal (attribute buffs only)
         top_enemy = max(targets, key=lambda e: e.atk if e.is_alive() else -1)
         removable = [n for n, d in top_enemy.buffs.items() if isinstance(d, dict) and BuffHandler.is_attribute_buff(d, strict=True)]
         if removable:
             removed = random.choice(removable)
-            del top_enemy.buffs[removed]
+            buff = top_enemy.buffs.pop(removed, None)
             logs.append(f"{self.name} removes buff '{removed}' from {top_enemy.name}.")
+            if hasattr(top_enemy, "recalculate_stats"):
+                top_enemy.recalculate_stats()
 
+        # Apply +50% Crit Damage buff to allies
         buffs_applied = []
         for ally in team.heroes:
-            applied, msg = BuffHandler.apply_buff(ally, "transition_crit_dmg_up", {"attribute": "crit_dmg", "bonus": 50, "rounds": 2}, boss)
+            applied, msg = BuffHandler.apply_buff(ally, "transition_crit_dmg_up", {
+                "attribute": "crit_dmg", "bonus": 50, "rounds": 2
+            }, boss)
             if applied:
                 buffs_applied.append((ally.name, "+50% Crit Damage (2 rounds)"))
             elif msg:
@@ -160,12 +207,14 @@ class DGN(Hero):
             logs.append("✨ Transition Buffs Applied:")
             logs.extend(group_team_buffs(buffs_applied))
 
+        # Random +20 energy to all
         if random.random() < 0.5:
             for ally in team.heroes:
                 ally.energy += 20
             logs.append("⚡ All allies gain +20 Energy.")
 
         return logs
+
 
     def on_receive_damage(self, damage, team, source):
         if self.has_seal_of_light:
@@ -208,3 +257,26 @@ class DGN(Hero):
                     logs.append(f"{ally.name} activates Fluorescent Shield: heals {self.format_damage_log(heal)}, gains {self.format_damage_log(shield)} shield, +20% holy damage.")
 
         return logs
+
+    def after_attack(self, source, target, skill_type, team):
+        logs = []
+        if skill_type not in ["basic", "active"]:
+            return logs
+
+        debuffs = [
+            (n, b) for n, b in target.buffs.items()
+            if BuffHandler.is_attribute_reduction(b, strict=True)
+            and not n.startswith("gg_")
+            and "_self" not in n
+        ]
+
+        if debuffs:
+            replicate = random.sample(debuffs, min(2, len(debuffs)))
+            for name, debuff in replicate:
+                target.apply_buff(f"replicated_{name}_from_dgn", debuff.copy())
+                logs.append(f"🔁 {self.name} replicates debuff '{name}' again onto {target.name}.")
+        else:
+            logs.append(f"⚠️ {self.name} found no valid debuffs to replicate onto {target.name}.")
+
+        return logs
+

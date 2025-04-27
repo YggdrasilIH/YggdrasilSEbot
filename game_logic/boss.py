@@ -6,9 +6,10 @@ from utils.log_utils import stylize_log
 class Boss:
     def __init__(self):
         self.name = "Boss"
-        self.max_hp = 20_000_000_000_000
+        self.max_hp = 200_000_000_000_000
         self.hp = self.max_hp
         self.atk = 100_000
+        self.base_atk = 100_000
         self.dr = 0
         self.ADR = 0
         self.armor = 3000
@@ -16,6 +17,7 @@ class Boss:
         self.crit_rate = 0
         self.crit_dmg = 0
         self.hd = 0
+        self.base_hd = 0
         self.total_damage_taken = 0
         self.attribute_effects = []
         self.energy = 0
@@ -36,6 +38,31 @@ class Boss:
 
     def apply_buff(self, buff_name, buff_data):
         self.buffs[buff_name] = buff_data
+        self.recalculate_stats()
+
+
+    def recalculate_stats(self):
+        self.atk = self.base_atk
+        self.hd = 0
+        self.all_damage_bonus = 0
+
+        for buff in self.buffs.values():
+            if isinstance(buff, dict):
+                if buff.get("attribute") == "atk":
+                    bonus = buff.get("bonus", 0)
+                    # Handle if debuff is a percentage (e.g., -0.5 = -50%)
+                    if isinstance(bonus, float) and abs(bonus) < 1:
+                        self.atk = int(self.atk * (1 + bonus))
+                    else:
+                        self.atk += bonus
+                if buff.get("attribute") == "HD":
+                    self.hd += buff.get("bonus", 0)
+                if buff.get("attribute") == "all_damage_bonus":
+                    self.all_damage_bonus += buff.get("bonus", 0)
+        
+        self.atk = max(self.atk, 1)  # Never allow negative or zero attack
+
+
 
     def take_damage(self, dmg, source_hero=None, team=None, real_attack=False):
         logs = []
@@ -158,7 +185,10 @@ class Boss:
                     continue
                 else:
                     apply_control_effect(hero, effect, boss=boss, team=hero.team if hasattr(hero, 'team') else None)
+                    if boss:  # 👈 very important
+                        boss.on_hero_controlled(hero, effect)
             hero.calamity = 0
+
 
     def boss_action(self, heroes, round_num):
         logs = []
@@ -264,24 +294,20 @@ class Boss:
             elif attr == "atk":
                 self.atk -= bonus
             del self.buffs[buff_name]
+        self.recalculate_stats()
+
 
     def on_hero_controlled(self, hero, effect):
         if effect == "fear":
-            self.hd += 50
-            BuffHandler.apply_buff(self, "fear_buff", {"attribute": "HD", "bonus": 50, "rounds": 15})
-            self.attribute_effects.append({
-                "attribute": "HD",
-                "value": 50,
-                "rounds": 15,
-                "name": "HD buff (Fear)"
-            })
+            BuffHandler.apply_buff(self, f"fear_buff_{random.randint(1,99999)}", {"attribute": "HD", "bonus": 50, "rounds": 15})
             self._round_passive_bonuses["HD"] += 50
         elif effect == "seal_of_light":
-            BuffHandler.apply_buff(self, "seal_buff", {"attribute": "all_damage_bonus", "bonus": 15, "rounds": 15})
+            BuffHandler.apply_buff(self, f"seal_buff_{random.randint(1,99999)}", {"attribute": "all_damage_bonus", "bonus": 15, "rounds": 15})
             self._round_passive_bonuses["ADD"] += 15
         elif effect == "silence":
             self.energy += 50
             self._round_passive_bonuses["Energy"] += 50
+
 
     def process_control_buffs(self, heroes):
         for h in heroes:
@@ -377,6 +403,7 @@ class Boss:
             self._round_passive_bonuses = {"HD": 0, "Energy": 0, "ADD": 0}
 
         self.process_buffs()
+        self.recalculate_stats()
         return logs
     
     def counterattack(self, heroes):

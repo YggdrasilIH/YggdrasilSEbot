@@ -52,19 +52,28 @@ class BuffHandler:
             hero.curse_of_decay -= 1
             return False, msg
 
-        # --- Stacking Logic ---
+        # --- Stacking Logic with safety ---
         if buff_name in hero.buffs:
             existing = hero.buffs[buff_name]
-            # If both old and new buffs have 'bonus', add them
-            if "bonus" in existing and "bonus" in buff_data:
-                existing["bonus"] += buff_data["bonus"]
-            # If both have 'heal_amount', add them
+            # If merging same attribute
+            if "attribute" in existing and "attribute" in buff_data and existing["attribute"] == attr:
+                # Merge bonuses carefully
+                existing_bonus = existing.get("bonus", 0)
+                incoming_bonus = buff_data.get("bonus", 0)
+                existing["bonus"] = existing_bonus + incoming_bonus
+            else:
+                # Otherwise, overwrite safely
+                hero.buffs[buff_name] = buff_data
+
+            # Heal stacking
             if "heal_amount" in existing and "heal_amount" in buff_data:
                 existing["heal_amount"] += buff_data["heal_amount"]
-            # If both have 'shield', add them
+
+            # Shield stacking
             if "shield" in existing and "shield" in buff_data:
                 existing["shield"] += buff_data["shield"]
-            # Extend duration if incoming buff has longer remaining rounds
+
+            # Extend rounds if needed
             if "rounds" in existing and "rounds" in buff_data:
                 existing["rounds"] = max(existing["rounds"], buff_data["rounds"])
         else:
@@ -74,7 +83,7 @@ class BuffHandler:
         if attr == "all_damage_dealt":
             hero.all_damage_dealt += buff_data.get("bonus", 0)
 
-        return True, None  # Buff applied successfully
+        return True, None
 
     @staticmethod
     def apply_debuff(target, debuff_name, debuff_data):

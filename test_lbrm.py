@@ -42,7 +42,7 @@ def simulate_lbrm():
     logs.extend(lbrm.after_attack(lfa, boss, "basic", team))
 
     # Simulate end of round — if TP is 6+, release transition
-    logs.extend(lbrm.on_end_of_round(team, boss))
+    logs.extend(lbrm.end_of_round(team, boss,round_num=None))
 
     # Print status summaries
     logs.append(lbrm.get_status_description())

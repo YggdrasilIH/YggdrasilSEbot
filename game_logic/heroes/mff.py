@@ -28,24 +28,45 @@ class MFF(Hero):
             return logs
 
         logs.extend(hero_deal_damage(self, boss, self.atk * 16, is_active=True, team=team))
+
         poison_damage = int(self.atk * 12)
         logs.append(f"☠️ Applies Poison: {poison_damage} for 3 rounds.")
         logs.extend(BuffHandler.apply_debuff(boss, "poison", {
             "attribute": "poison", "damage": poison_damage, "rounds": 3
         }))
 
-        removed = [name for name, data in boss.buffs.items()
-                   if isinstance(data, dict) and "attribute" in data and "bonus" in data and data["attribute"] in BuffHandler.ATTRIBUTE_BUFF_KEYS]
-        for buff_name in removed[:2]:
-            del boss.buffs[buff_name]
-        if removed:
-            logs.append(f"🧹 Removes buffs from Boss: {', '.join(removed[:2])}.")
+        # Find all ATK and HD buffs
+        atk_buffs = [name for name, data in boss.buffs.items()
+                    if isinstance(data, dict) and data.get("attribute") == "atk"]
+        hd_buffs = [name for name, data in boss.buffs.items()
+                    if isinstance(data, dict) and data.get("attribute") == "HD"]
 
+        # Remove ALL ATK buffs
+        for buff_name in atk_buffs:
+            buff = boss.buffs.pop(buff_name, None)
+            if buff:
+                boss.atk -= buff.get("bonus", 0)
+
+        # Remove ALL HD buffs
+        for buff_name in hd_buffs:
+            buff = boss.buffs.pop(buff_name, None)
+            if buff:
+                boss.hd -= buff.get("bonus", 0)
+
+        removed_buffs = atk_buffs + hd_buffs
+        if removed_buffs:
+            logs.append(f"🧹 {self.name} removes boss buffs: {', '.join(removed_buffs)}.")
+            
+        boss.recalculate_stats()
+
+        # Gain EF stack
         self.evolutionary_factor = min(self.evolutionary_factor + 1, 3)
         logs.append(f"🔬 Gains 1 Evolutionary Factor (now {self.evolutionary_factor}).")
 
         logs.extend(self.apply_evolutionary_factor_effects(team))
         return logs
+
+
 
     def basic_attack(self, boss, team):
         logs = []
