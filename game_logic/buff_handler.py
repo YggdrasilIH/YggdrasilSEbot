@@ -9,9 +9,14 @@ class BuffHandler:
 
     @staticmethod
     def is_attribute_buff(buff, strict=False):
+        # 🚨 New addition: If it's a skill_buff, treat it as NOT attribute buff
+        if buff.get("skill_buff", False):
+            return False
+
         attr = buff.get("attribute")
         bonus = buff.get("bonus", 0)
         name = buff.get("name", "")
+
         if attr not in BuffHandler.ATTRIBUTE_BUFF_KEYS:
             return False
         if strict:
@@ -20,6 +25,7 @@ class BuffHandler:
             if name.startswith("replicated_") or name.endswith("_down"):
                 return False
         return True
+
 
     @staticmethod
     def is_attribute_reduction(debuff, strict=False):
@@ -79,22 +85,88 @@ class BuffHandler:
         else:
             hero.buffs[buff_name] = buff_data
 
-        # Apply immediate impact for all_damage_dealt
+        # Apply immediate impact to hero stats if attribute matches
+        bonus = buff_data.get("bonus", 0)
         if attr == "all_damage_dealt":
-            hero.all_damage_dealt += buff_data.get("bonus", 0)
+            hero.all_damage_dealt += bonus
+        elif attr == "atk":
+            hero.atk += bonus
+        elif attr == "armor":
+            hero.armor += bonus
+        elif attr == "speed":
+            hero.speed += bonus
+        elif attr == "skill_damage":
+            hero.skill_damage += bonus
+        elif attr == "precision":
+            hero.precision += bonus
+        elif attr == "block":
+            hero.block += bonus
+        elif attr == "crit_rate":
+            hero.crit_rate += bonus
+        elif attr == "crit_dmg":
+            hero.crit_dmg += bonus
+        elif attr == "armor_break":
+            hero.armor_break += bonus
+        elif attr == "control_immunity":
+            hero.control_immunity += bonus
+        elif attr == "dr":
+            hero.dr += bonus
+        elif attr == "hd":
+            hero.hd += bonus
+        elif attr == "adr":
+            hero.ADR += bonus
+        elif attr == "energy":
+            hero.energy += bonus
 
         return True, None
+
 
     @staticmethod
     def apply_debuff(target, debuff_name, debuff_data):
         if BuffHandler.is_attribute_reduction(debuff_data):
             target.buffs[debuff_name] = debuff_data
+
+            # Apply immediate impact to hero stats if attribute matches
+            bonus = debuff_data.get("bonus", 0)
+            attr = debuff_data.get("attribute")
+
+            if attr == "atk":
+                target.atk += bonus
+            elif attr == "armor":
+                target.armor += bonus
+            elif attr == "speed":
+                target.speed += bonus
+            elif attr == "skill_damage":
+                target.skill_damage += bonus
+            elif attr == "precision":
+                target.precision += bonus
+            elif attr == "block":
+                target.block += bonus
+            elif attr == "crit_rate":
+                target.crit_rate += bonus
+            elif attr == "crit_dmg":
+                target.crit_dmg += bonus
+            elif attr == "armor_break":
+                target.armor_break += bonus
+            elif attr == "control_immunity":
+                target.control_immunity += bonus
+            elif attr == "dr":
+                target.dr += bonus
+            elif attr == "hd":
+                target.hd += bonus
+            elif attr == "adr":
+                target.ADR += bonus
+            elif attr == "energy":
+                target.energy += bonus
+
             attr = debuff_data.get('attribute', '')
             val = debuff_data.get('bonus', '')
             return [f"🔻 {target.name}: {val:+} {attr} ({debuff_data.get('rounds', '?')}r)"]
+
         else:
             target.buffs[debuff_name] = debuff_data
             return [f"🔻 {target.name}: {debuff_name} (skill effect)"]
+
 
     @staticmethod
     def cap_stats(hero):

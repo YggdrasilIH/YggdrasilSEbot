@@ -30,7 +30,7 @@ class Hero:
         self.spd = spd
         self.crit_rate = crit_rate
         self.crit_dmg = crit_dmg
-        self.ctrl_immunity = ctrl_immunity
+        self.ctrl_immunity = ctrl_immunity  # ✅ Correct here
         self.hd = hd
         self.precision = precision
         self.energy = 50
@@ -64,15 +64,93 @@ class Hero:
         self.total_damage_dealt = 0
         self.purify_enable = purify_enable
         self.trait_enable = trait_enable
+        self.bonus_damage_vs_poisoned = 0
+        self._base_hd = self.hd
+        self._base_precision = self.precision
+        self._base_ctrl_immunity = self.ctrl_immunity
+        self._base_dr = self.DR
+        self._base_adr = self.ADR
+        self._base_all_damage_dealt = self.all_damage_dealt
+        self._base_spd = self.spd
+        self._base_skill_damage = getattr(self, "skill_damage", 0)
+        self._base_block = getattr(self, "block", 0)
+        self._base_crit_rate = self.crit_rate
+        self._base_crit_dmg = self.crit_dmg
+        self._base_armor_break = getattr(self, "armor_break", 0)
+
 
         if self.artifact:
             self.artifact.owner = self
         if self.lifestar:
             self.lifestar.owner = self
 
+
     def set_enables(self, purify, trait):
         self.purify_enable = purify
         self.trait_enable = trait
+
+    def recalculate_stats(self):
+        """Recalculate current stats (ATK, HD, ADD, etc.) based on base stats + buffs."""
+        # Reset to original BASE stats
+        self.atk = self.original_atk
+        self.armor = self.original_armor
+        self.all_damage_dealt = 0
+        self.hd = self._base_hd
+        self.precision = self._base_precision
+        self.ctrl_immunity = self._base_ctrl_immunity
+        self.DR = self._base_dr
+        self.ADR = self._base_adr
+        self.spd = self._base_spd
+        self.skill_damage = self._base_skill_damage
+        self.block = self._base_block
+        self.crit_rate = self._base_crit_rate
+        self.crit_dmg = self._base_crit_dmg
+        self.armor_break = self._base_armor_break
+
+        # Apply active buffs
+        for buff in self.buffs.values():
+            if isinstance(buff, dict):
+                attr = buff.get("attribute")
+                attr = buff.get("attribute", "").lower()
+                val = buff.get("bonus", 0)
+
+                if attr == "all_damage_dealt":
+                    self.all_damage_dealt += val
+                elif attr == "atk":
+                    self.atk += val
+                elif attr == "armor":
+                    self.armor += val
+                elif attr == "speed":
+                    self.speed += val
+                elif attr == "skill_damage":
+                    self.skill_damage += val
+                elif attr == "precision":
+                    self.precision += val
+                elif attr == "block":
+                    self.block += val
+                elif attr == "crit_rate":
+                    self.crit_rate += val
+                elif attr == "crit_dmg":
+                    self.crit_dmg += val
+                elif attr == "armor_break":
+                    self.armor_break += val
+                elif attr == "control_immunity":
+                    self.ctrl_immunity += val
+                elif attr == "dr":
+                    self.DR += val
+                elif attr == "hd":
+                    self.hd += val
+                elif attr == "adr":
+                    self.ADR += val
+                elif attr == "energy":
+                    self.energy += val
+
+        # Hardcaps
+        if self.precision > 150:
+            self.precision = 150
+        if self.crit_dmg > 150:
+            self.crit_dmg = 150
+
 
     def is_alive(self):
         return self.hp > 0
@@ -173,6 +251,8 @@ class Hero:
 
     def end_of_round(self, boss, team, round_num):
         self.decrement_control_effects()
+
+        self.recalculate_stats()
         messages = []
         messages.append(f"🔄 End-of-Round for {self.name}")
 

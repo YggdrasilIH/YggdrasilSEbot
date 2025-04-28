@@ -120,7 +120,7 @@ class MFF(Hero):
                     })
                     buffs_applied.append((ally.name, "+40% ADR"))
                     BuffHandler.apply_buff(ally, "ef1_ctrl", {
-                        "attribute": "control_immunity", "bonus": 35, "rounds": 3
+                        "attribute": "ctrl_immunity", "bonus": 35, "rounds": 3
                     })
                     buffs_applied.append((ally.name, "+35% Control Immunity"))
                 if buffs_applied:
@@ -144,6 +144,14 @@ class MFF(Hero):
                 self.permanent_ef3_bonus_active = True
                 logs.append("🌳 EF3 unlocked: stacking bonuses begin.")
 
+                # MFF starts at +10% bonus to poisoned targets
+                self.bonus_damage_vs_poisoned = 10.0
+                for ally in team.heroes:
+                    if ally != self and ally.is_alive():
+                        # Allies start at +3.3% bonus to poisoned targets
+                        ally.bonus_damage_vs_poisoned = 3.3
+
+
             return logs
 
     def end_of_round(self, boss, team, round_num):
@@ -152,19 +160,20 @@ class MFF(Hero):
         logs = super().end_of_round(boss, team, round_num)
 
         if self.permanent_ef3_bonus_active:
-            # Self stacking
+            # MFF self stacking
             self.add_or_update_buff(self, "ef3_self_atk", {"attribute": "atk", "bonus": int(self.atk * 0.12), "rounds": 9999})
             self.add_or_update_buff(self, "ef3_self_speed", {"attribute": "speed", "bonus": 15, "rounds": 9999})
-            self.ef3_poison_bonus = getattr(self, "ef3_poison_bonus", 0) + 0.10
+            self.bonus_damage_vs_poisoned += 10.0  # MFF gains +10% poison bonus each round
 
             # Allies stacking
             for ally in team.heroes:
-                if ally != self:
+                if ally != self and ally.is_alive():
                     ally_atk = int(self.atk * 0.12 * 0.33)
                     ally_speed = int(15 * 0.33)
                     self.add_or_update_buff(ally, "ef3_ally_atk", {"attribute": "atk", "bonus": ally_atk, "rounds": 9999})
                     self.add_or_update_buff(ally, "ef3_ally_speed", {"attribute": "speed", "bonus": ally_speed, "rounds": 9999})
-                    ally.ef3_poison_bonus = getattr(ally, "ef3_poison_bonus", 0) + (0.10 * 0.33)
+                    ally.bonus_damage_vs_poisoned += 3.3  # Allies gain +3.3% poison bonus each round
 
-            logs.append(f"🌳 {self.name} stacks EF3 buffs: +12% ATK, +15 SPD, +10% poison bonus.")
+            logs.append(f"🌳 {self.name} stacks EF3 buffs: +12% ATK, +15 SPD, +10% Poison Bonus (self), +3.3% (allies).")
+
         return logs

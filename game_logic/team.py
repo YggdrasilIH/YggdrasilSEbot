@@ -80,6 +80,13 @@ class Team:
 
         for hero in self.heroes:
             if hero.is_alive():
+                hero.recalculate_stats()  # ✅ <<< INSERTED THIS
+
+                # 🔥 Real-time debug print
+                print(f"[DEBUG-BATTLE] {hero.name} Pre-Attack Stats → ATK: {hero.atk:,} | ADD: {hero.all_damage_dealt:.1f}% | HD: {hero.hd}")
+                for name, buff in hero.buffs.items():
+                    print(f"[DEBUG-BATTLE] {hero.name} buff {name}: {buff}")
+
                 if hero.energy >= 100 and not hero.has_silence:
                     hero._using_real_attack = True
                     skill_logs = hero.active_skill(boss, self)
@@ -139,6 +146,7 @@ class Team:
         logs = group_control_effects(logs)
         return logs
 
+
     def end_of_round(self, boss, round_num):
         logs = []
         if not boss.is_alive():
@@ -149,8 +157,9 @@ class Team:
 
         for hero in self.heroes:
             if hero.is_alive():
-                hero.process_buffs()
+                # DO NOT CALL hero.process_buffs() HERE
 
+                # Only handle special universal buffs and shields
                 if "start_ADR" in hero.buffs:
                     hero.buffs["start_ADR"]["bonus"] -= 10
                     if hero.buffs["start_ADR"]["bonus"] <= 0:
@@ -166,15 +175,19 @@ class Team:
                     hero.shield += int(hero.max_hp * 0.25)
                     buffs_applied.append((hero.name, f"+{int(hero.max_hp * 0.25) / 1_000_000:.0f}M Shield"))
 
+                # ✅ Call hero.end_of_round, let hero handle process_buffs inside
                 if hasattr(hero, "end_of_round"):
                     logs += hero.end_of_round(boss, self, round_num)
+
                 if hero.purify_enable and hasattr(hero.purify_enable, "apply_end_of_round"):
                     result = hero.purify_enable.apply_end_of_round(hero, boss)
                     if result:
                         logs.append(result)
+
                 if hasattr(hero, "lifestar") and hero.lifestar and hasattr(hero.lifestar, "end_of_round"):
                     logs += hero.lifestar.end_of_round(hero, self, boss, round_num)
 
+                # Decrement control effects manually (fear, silence, seal)
                 if hero.has_fear:
                     hero.fear_rounds -= 1
                     if hero.fear_rounds <= 0:
@@ -201,6 +214,7 @@ class Team:
                 hero.calamity -= 1
 
         return logs
+
 
     def status_descriptions(self):
         return [hero.get_status_description() for hero in self.heroes]

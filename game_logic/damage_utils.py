@@ -24,10 +24,10 @@ def hero_deal_damage(source, target, base_damage, is_active, team, allow_counter
     phase1 = damage
 
     # Phase 2: Multiplicative bonuses
-    poison_bonus = getattr(source, "ef3_poison_bonus", 0) if any(
-        isinstance(b, dict) and b.get("attribute") == "poison"
-        for b in getattr(target, "buffs", {}).values()
-    ) else 0
+    poison_bonus = 0
+    if any(isinstance(b, dict) and b.get("attribute") == "poison" for b in getattr(target, "buffs", {}).values()):
+        poison_bonus = getattr(source, "bonus_damage_vs_poisoned", 0)
+
 
     gk = 0
     if getattr(source, "gk", False) and source.hp > 0:

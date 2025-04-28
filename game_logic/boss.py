@@ -6,14 +6,15 @@ from utils.log_utils import stylize_log
 class Boss:
     def __init__(self):
         self.name = "Boss"
-        self.max_hp = 200_000_000_000_000
+        self.max_hp = 20_000_000_000_000_000_000
         self.hp = self.max_hp
-        self.atk = 100_000
-        self.base_atk = 100_000
+        self.atk = 100_000_000
+        self.base_atk = 100_000_000
         self.dr = 0
         self.ADR = 0
-        self.armor = 3000
+        self.armor = 0000
         self.speed = 0
+        self.control_immunity = 0
         self.crit_rate = 0
         self.crit_dmg = 0
         self.hd = 0

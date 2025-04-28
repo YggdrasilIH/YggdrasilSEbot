@@ -57,7 +57,7 @@ class LFA(Hero):
         if hasattr(self.trait_enable, "override_crit_check"):
             self.trait_enable.override_crit_check(crit_failed)
 
-        steal_amount = int(boss.atk * 0.30)
+        steal_amount = int(boss.base_atk * 0.30)
         logs.extend(BuffHandler.apply_debuff(boss, "lfa_atk_down_active", {
             "attribute": "atk", "bonus": -0.30, "rounds": 9999
         }))

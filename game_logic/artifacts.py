@@ -124,18 +124,26 @@ class Mirror(Artifact):
 
         return msgs
 
+# game_logic/artifacts.py
+
+# game_logic/artifacts.py
+
 class Antlers(Artifact):
     def apply_end_of_round(self, hero, team, boss, round_num):
-        if hero.has_seal_of_light:
-            return [stylize_log("info", f"{hero.name}'s Antlers effect is sealed and does nothing.")]
-
         if not hasattr(hero, "antler_stacks"):
             hero.antler_stacks = 0
         hero.antler_stacks += 1
-        bonus = 9 * hero.antler_stacks
-        BuffHandler.apply_buff(hero, f"antlers_bonus_{hero.antler_stacks}", {
+
+        bonus = 9
+        buff_name = f"antlers_round_{hero.antler_stacks}"
+
+        hero.apply_buff(buff_name, {
             "attribute": "all_damage_dealt",
-            "bonus": 9,
-            "rounds": 9999
-        }, boss)
-        return [stylize_log("buff", f"{hero.name} gains +9% all damage from Antlers (Total: {bonus}%).")]
+            "bonus": bonus,
+            "rounds": 9999,
+            "skill_buff": True  # ✅ Now protected from Curse of Decay
+        })
+
+        hero.all_damage_dealt += bonus  # Still increment numerical stat directly too
+
+        return [stylize_log("buff", f"{hero.name} gains +9% all damage from Antlers (Total {hero.antler_stacks * 9}%).")]
