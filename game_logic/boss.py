@@ -156,6 +156,9 @@ class Boss:
         adr = min(getattr(hero, "ADR", 0) / 100, 0.75)
         damage *= (1 - adr)
 
+        if hasattr(hero, "dt_level") and hero.dt_level > 0:
+            reduction = min(hero.dt_level * 0.05 + 0.05, 0.80)
+            damage = int(damage * (1 - reduction))
         damage = max(0, int(damage))
 
         if hero.shield > 0:

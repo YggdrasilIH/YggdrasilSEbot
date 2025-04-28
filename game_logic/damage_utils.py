@@ -52,6 +52,12 @@ def hero_deal_damage(source, target, base_damage, is_active, team, allow_counter
     # Final Phase 2 multiplier
     phase2_multiplier = (1 + poison_bonus) * (1 + gk) * (1 + defier) * (1 + bs_bonus)
     damage = int(phase1 * phase2_multiplier)
+    # 🆕 DT outgoing bonus
+    if hasattr(source, "dt_level") and source.dt_level > 0:
+        dt_bonus = 1 + (source.dt_level * 0.10)  # 10% bonus per level
+        damage = int(damage * dt_bonus)
+        logs.append(f"🔮 {source.name} gains +{int((dt_bonus - 1) * 100)}% damage from DT level {source.dt_level}.")
+
 
     # Apply Abyssal Corruption bonus silently
     if crit:

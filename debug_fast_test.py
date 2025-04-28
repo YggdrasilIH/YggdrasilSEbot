@@ -72,24 +72,54 @@ def run_debugfast_terminal():
     active_core = PDECore()
 
     data = [
-        ("hero_MFF_Hero", 11e9, 6e7, 3800, "CP", "UW", DB()),
-        ("hero_SQH_Hero", 12e9, 7e7, 3700, "CP", "UW", DB()),
-        ("hero_LFA_Hero", 20e9, 1.6e8, 3540, "MP", "BS", Antlers()),
-        ("hero_DGN_Hero", 14e9, 9e7, 3300, "CP", "UW", Scissors()),
-        ("hero_PDE_Hero", 9e9, 6e7, 2300, "CP", "UW", Mirror()),
-        ("hero_LBRM_Hero", 9.9e9, 5e7, 2000, "CP", "UW", Mirror())
+        # (hero_id, hp, atk, spd, purify, trait, artifact, dt_level, crit_rate, crit_dmg, precision, hd, add, dr, adr, armor)
+        ("hero_MFF_Hero", 11e9, 6e7, 3800, "CP", "UW", DB(), 15, 0, 0, 0, 0, 0, 0, 0, 0),
+        ("hero_SQH_Hero", 12e9, 7e7, 3700, "CP", "UW", DB(), 15, 0, 0, 0, 0, 0, 0, 0, 0),
+        ("hero_LFA_Hero", 20e9, 1.6e8, 3540, "CP", "BS", Antlers(), 15, 20, 150, 150, 150, 150, 0, 0, 0),
+        ("hero_DGN_Hero", 14e9, 9e7, 3300, "CP", "UW", Scissors(), 15, 0, 0, 0, 0, 0, 0, 0, 0),
+        ("hero_PDE_Hero", 9e9, 6e7, 2300, "CP", "UW", Mirror(), 15, 0, 0, 0, 0, 0, 0, 0, 0),
+        ("hero_LBRM_Hero", 9.9e9, 5e7, 2000, "CP", "UW", Mirror(), 14, 0, 0, 0, 0, 0, 0, 0, 0)
     ]
 
+
     heroes = []
-    for hid, hp, atk, spd, purify, trait, artifact in data:
+    for hid, hp, atk, spd, purify, trait, artifact, dt_level, crit_rate, crit_dmg, precision, hd, add, dr, adr, armor in data:
         lifestar = Specter() if hid == "hero_LFA_Hero" else None
         h = Hero.from_stats(hid, [hp, atk, spd], artifact=artifact, lifestar=lifestar)
         h.set_enables(purify_mapping.get(purify), trait_mapping.get(trait))
+        h.dt_level = dt_level
+
+        # Set offensive stats
+        h.crit_rate += crit_rate
+        h._base_crit_rate += crit_rate
+
+        h.crit_dmg += crit_dmg
+        h._base_crit_dmg += crit_dmg
+
+        h.precision += precision
+        h._base_precision += precision
+
+        h.hd += hd
+        h._base_hd += hd
+
+        h.all_damage_dealt += add
+        h._base_all_damage_dealt += add
+
+        # Set defensive stats
+        h.DR += dr
+        h._base_dr += dr
+
+        h.ADR += adr
+        h._base_adr += adr
+
+        h.armor += armor
+        h.original_armor += armor
+
+        # Standard hero setup
         h.gk = h.defier = True
         h.total_damage_dealt = 0
         h._damage_rounds = []
         heroes.append(h)
-
     team = Team(heroes, heroes[:2], heroes[2:])
     boss = Boss()
 

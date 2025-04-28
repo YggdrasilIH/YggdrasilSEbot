@@ -33,6 +33,7 @@ class Hero:
         self.ctrl_immunity = ctrl_immunity  # ✅ Correct here
         self.hd = hd
         self.precision = precision
+        self.dt_level = 0
         self.energy = 50
         self.status_effects = set()
         self.has_silence = False
@@ -121,7 +122,7 @@ class Hero:
                 elif attr == "armor":
                     self.armor += val
                 elif attr == "speed":
-                    self.speed += val
+                    self.spd += val
                 elif attr == "skill_damage":
                     self.skill_damage += val
                 elif attr == "precision":
@@ -154,35 +155,6 @@ class Hero:
 
     def is_alive(self):
         return self.hp > 0
-
-    def apply_damage(self, damage, boss, team=None):
-        if "boss_attack_debuff" in self.buffs:
-            damage = int(damage * self.buffs["boss_attack_debuff"]["attack_multiplier"])
-        crit = random.random() < (self.crit_rate / 100)
-        if crit:
-            damage *= (self.crit_dmg / 100)
-        damage *= (1 + self.hd * 0.007) * (1 + min(self.precision, 150) * 0.003)
-        damage *= (1 + self.all_damage_dealt / 100)
-
-        if isinstance(self.trait_enable, BalancedStrike):
-            heal_amt, dmg_bonus = self.trait_enable.apply_crit_bonus(damage, crit)
-            damage += dmg_bonus
-            self.hp = min(self.max_hp, self.hp + heal_amt)
-
-        if getattr(self, "gk", False) and self.hp > 0:
-            ratio = boss.hp / self.hp
-            if ratio > 1:
-                bonus_steps = floor((ratio - 1) / 0.10)
-                bonus_multiplier = min(bonus_steps * 0.02, 1.0)
-                damage = int(damage * (1 + bonus_multiplier))
-
-        if getattr(self, "defier", False):
-            if boss.hp >= 0.70 * boss.max_hp:
-                damage = int(damage * 1.30)
-
-        counter_logs = boss.take_damage(damage, source_hero=self, team=team)
-        self.hp = max(self.hp, 0)
-        return int(damage), f"{self.name} deals {int(damage)} ({'CRIT' if crit else 'Normal'}) damage.", counter_logs
 
     def apply_buff(self, buff_name, buff_data):
         self.buffs[buff_name] = buff_data
