@@ -22,10 +22,11 @@ def group_control_effects(logs):
     return grouped
 
 class Team:
-    def __init__(self, heroes, front_line, back_line):
+    def __init__(self, heroes, front_line, back_line, pet=None):
         self.heroes = heroes
         self.front_line = front_line
         self.back_line = back_line
+        self.pet = pet
         for hero in self.heroes:
             hero.team = self
             if hero.artifact and hasattr(hero.artifact, "bind_team"):
@@ -107,6 +108,8 @@ class Team:
                     logs.extend(self.trigger_mff_passive(hero, boss))
                     logs.extend(apply_foresight(hero, "active"))
                     hero.energy = 0
+                    if self.pet and hasattr(self.pet, "on_hero_active"):
+                        self.pet.on_hero_active(hero)
 
                     crit_occurred = any("CRIT" in str(line) for line in skill_logs)
                     self.energy_gain_on_being_hit(boss, logs, crit_occurred)
@@ -212,6 +215,10 @@ class Team:
         for hero in self.heroes:
             if hero.is_alive() and hero.calamity > 0:
                 hero.calamity -= 1
+
+        if self.pet:
+            logs += self.pet.apply_end_of_round(self, boss, round_num)
+
 
         return logs
 

@@ -28,6 +28,11 @@ def hero_deal_damage(source, target, base_damage, is_active, team, allow_counter
     if any(isinstance(b, dict) and b.get("attribute") == "poison" for b in getattr(target, "buffs", {}).values()):
         poison_bonus = getattr(source, "bonus_damage_vs_poisoned", 0)
 
+    burn_bonus = 0
+    if hasattr(source, "phoenix_burn_bonus_rounds") and source.phoenix_burn_bonus_rounds > 0:
+        if hasattr(target, "poison_effects"):
+            if any(effect.get("attribute") == "burn" for effect in target.poison_effects):
+                burn_bonus = 0.80
 
     gk = 0
     if getattr(source, "gk", False) and source.hp > 0:
@@ -50,7 +55,7 @@ def hero_deal_damage(source, target, base_damage, is_active, team, allow_counter
             logs.append(f"❤️ {source.name} heals {heal_amt // 1_000_000}M HP from Balanced Strike.")
 
     # Final Phase 2 multiplier
-    phase2_multiplier = (1 + poison_bonus) * (1 + gk) * (1 + defier) * (1 + bs_bonus)
+    phase2_multiplier = (1 + poison_bonus) * (1 + burn_bonus) * (1 + gk) * (1 + defier) * (1 + bs_bonus)
     damage = int(phase1 * phase2_multiplier)
     # 🆕 DT outgoing bonus
     if hasattr(source, "dt_level") and source.dt_level > 0:

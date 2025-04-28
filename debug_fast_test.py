@@ -3,10 +3,12 @@
 from game_logic import Hero, Boss, Team
 from game_logic.artifacts import Scissors, DB, Mirror, Antlers
 from game_logic.cores import PDECore
+from game_logic.pets import Phoenix
 from game_logic.lifestar import Specter
 from game_logic.enables import ControlPurify, AttributeReductionPurify, MarkPurify, BalancedStrike, UnbendingWill
 from utils.battle import chunk_logs
 import re
+
 
 purify_mapping = {
     "CP": ControlPurify(),
@@ -73,12 +75,12 @@ def run_debugfast_terminal():
 
     data = [
         # (hero_id, hp, atk, spd, purify, trait, artifact, dt_level, crit_rate, crit_dmg, precision, hd, add, dr, adr, armor)
-        ("hero_MFF_Hero", 11e9, 6e7, 3800, "CP", "UW", DB(), 15, 0, 0, 0, 0, 0, 0, 0, 0),
-        ("hero_SQH_Hero", 12e9, 7e7, 3700, "CP", "UW", DB(), 15, 0, 0, 0, 0, 0, 0, 0, 0),
-        ("hero_LFA_Hero", 20e9, 1.6e8, 3540, "CP", "BS", Antlers(), 15, 20, 150, 150, 150, 150, 0, 0, 0),
-        ("hero_DGN_Hero", 14e9, 9e7, 3300, "CP", "UW", Scissors(), 15, 0, 0, 0, 0, 0, 0, 0, 0),
-        ("hero_PDE_Hero", 9e9, 6e7, 2300, "CP", "UW", Mirror(), 15, 0, 0, 0, 0, 0, 0, 0, 0),
-        ("hero_LBRM_Hero", 9.9e9, 5e7, 2000, "CP", "UW", Mirror(), 14, 0, 0, 0, 0, 0, 0, 0, 0)
+        ("hero_MFF_Hero", 11e9, 6e7, 3800, "CP", "UW", DB(), 15, 0, 0, 0, 0, 0, 59, 40, 8000),
+        ("hero_SQH_Hero", 12e9, 7e7, 3400, "CP", "UW", DB(), 15, 0, 0, 0, 0, 0, 59, 40, 9000),
+        ("hero_LFA_Hero", 20e9, 1.6e8, 3640, "MP", "BS", Antlers(), 15, 20, 150, 150, 150, 150, 0, 16, 8999),
+        ("hero_DGN_Hero", 14e9, 9e7, 3300, "CP", "UW", Scissors(), 15, 0, 0, 0, 0, 0, 59, 16, 79999),
+        ("hero_PDE_Hero", 9e9, 6e7, 2300, "CP", "UW", Mirror(), 15, 0, 0, 0, 0, 0, 59, 40, 8444),
+        ("hero_LBRM_Hero", 9.9e9, 5e7, 2000, "CP", "UW", Mirror(), 14, 0, 0, 0, 0, 0, 59, 46, 8000)
     ]
 
 
@@ -120,7 +122,7 @@ def run_debugfast_terminal():
         h.total_damage_dealt = 0
         h._damage_rounds = []
         heroes.append(h)
-    team = Team(heroes, heroes[:2], heroes[2:])
+    team = Team(heroes, heroes[:2], heroes[2:], pet=Phoenix())
     boss = Boss()
 
     for hero in team.heroes:

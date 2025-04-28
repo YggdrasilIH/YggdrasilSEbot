@@ -229,6 +229,9 @@ class Hero:
         messages.append(f"🔄 End-of-Round for {self.name}")
 
         self.process_buffs()
+        if hasattr(self, "phoenix_burn_bonus_rounds") and self.phoenix_burn_bonus_rounds > 0:
+            self.phoenix_burn_bonus_rounds -= 1
+
 
         poison_msg = self.process_poison()
         if poison_msg:
