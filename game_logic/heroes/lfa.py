@@ -29,13 +29,13 @@ class LFA(Hero):
         crit_failed = False
 
         for _ in range(2):
-            base_hits.append(self.atk * (12+self.skill_damage/100))
+            base_hits.append(self.atk * self.skill_multiplier(12))
             if random.random() >= (self.crit_rate / 100):
                 crit_failed = True
 
         if boss.hp < boss.max_hp * 0.60:
             for _ in range(2):
-                base_hits.append(self.atk * (12+self.skill_damage/100))
+                base_hits.append(self.atk * self.skill_multiplier(12))
                 if random.random() >= (self.crit_rate / 100):
                     crit_failed = True
             second_total = sum(base_hits[2:])
@@ -43,7 +43,7 @@ class LFA(Hero):
             self.hp = min(self.max_hp, self.hp + heal_amt)
             logs.append(f"❤️ {self.name} heals for {heal_amt // 1_000_000}M HP from extra attacks.")
 
-        base_hits.append(self.atk * (12+self.skill_damage/100))
+        base_hits.append(self.atk * self.skill_multiplier(12))
         if random.random() >= (self.crit_rate / 100):
             crit_failed = True
 
@@ -84,7 +84,7 @@ class LFA(Hero):
             logs.append(f"{self.name} is feared and cannot perform basic attack.")
             return logs
 
-        dmg = int(self.atk * (9.6+self.skill_damage/100))
+        dmg = self.atk * self.skill_multiplier(9.6)
         logs.extend(hero_deal_damage(self, boss, dmg, is_active=False, team=team, allow_counter=True, allow_crit=True))
         logs.extend(self.apply_attribute_buff_with_curse("crit_rate", 24, boss))
 

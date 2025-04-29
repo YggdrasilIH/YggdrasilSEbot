@@ -221,6 +221,11 @@ class Hero:
             return [label]
         return []
 
+    def skill_multiplier(self, base_percent):
+        energy_bonus = max(0, self.energy - 100)
+        return base_percent + (self.skill_damage / 100) + (energy_bonus / 100)
+
+
     def end_of_round(self, boss, team, round_num):
         self.decrement_control_effects()
 
