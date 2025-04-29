@@ -36,16 +36,16 @@ def create_team_and_boss():
     active_core = PDECore()
 
     data = [
-        ("hero_MFF_Hero", 11e9, 6e7, 3800, "CP", "UW", DB(), 15, 0, 0, 0, 0, 0, 59, 40, 8000),
-        ("hero_SQH_Hero", 12e9, 7e7, 3670, "CP", "UW", Mirror(), 15, 0, 0, 0, 0, 0, 59, 40, 9000),
-        ("hero_LFA_Hero", 20e9, 1.75e8, 3540, "MP", "BS", Antlers(), 15, 100, 150, 150, 150, 150, 0, 16, 8999),
-        ("hero_DGN_Hero", 14e9, 9e7, 3300, "CP", "UW", Scissors(), 15, 0, 0, 0, 0, 0, 59, 16, 79999),
-        ("hero_PDE_Hero", 9e9, 6e7, 2300, "CP", "UW", Scissors(), 15, 0, 0, 0, 0, 0, 59, 40, 8444),
-        ("hero_LBRM_Hero", 9.9e9, 5e7, 2000, "CP", "UW", Mirror(), 14, 0, 0, 0, 0, 0, 59, 46, 8000)
+        ("hero_MFF_Hero", 11e9, 6e7, 3800, "CP", "UW", DB(), 15, 0, 0, 0, 0, 0, 0, 59, 40, 8000),
+        ("hero_SQH_Hero", 12e9, 7e7, 3670, "CP", "UW", Mirror(), 15, 0, 0, 0, 0, 0, 0, 59, 40, 9000),
+        ("hero_LFA_Hero", 20e9, 1.75e8, 3540, "MP", "BS", Antlers(), 15, 100, 150, 150, 500, 150, 150, 0, 16, 8999),
+        ("hero_DGN_Hero", 14e9, 9e7, 3300, "CP", "UW", Scissors(), 15, 0, 0, 0, 0, 0, 0, 59, 16, 79999),
+        ("hero_PDE_Hero", 9e9, 6e7, 2300, "CP", "UW", Scissors(), 15, 0, 0, 0, 0, 0, 0, 59, 40, 8444),
+        ("hero_LBRM_Hero", 9.9e9, 5e7, 2000, "CP", "UW", Mirror(), 14, 0, 0, 0, 0, 0, 0, 59, 46, 8000)
     ]
 
     heroes = []
-    for hid, hp, atk, spd, purify, trait, artifact, dt_level, crit_rate, crit_dmg, precision, hd, add, dr, adr, armor in data:
+    for hid, hp, atk, spd, purify, trait, artifact, dt_level, crit_rate, crit_dmg, precision, hd, skill_damage, add, dr, adr, armor in data:
         lifestar = Specter() if hid == "hero_LFA_Hero" else None
         h = Hero.from_stats(hid, [hp, atk, spd], artifact=artifact, lifestar=lifestar)
         h.set_enables(purify_mapping.get(purify), trait_mapping.get(trait))
@@ -58,6 +58,7 @@ def create_team_and_boss():
         h._base_crit_dmg += crit_dmg
         h.precision += precision
         h._base_precision += precision
+        h._base_skill_damage += skill_damage
         h.hd += hd
         h._base_hd += hd
         h.all_damage_dealt += add

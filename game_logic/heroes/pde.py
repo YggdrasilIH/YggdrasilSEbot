@@ -31,7 +31,7 @@ class PDE(Hero):
         if self.has_silence:
             logs.append(f"{self.name} is silenced and cannot use active skill.")
             return logs
-        logs.extend(hero_deal_damage(self, boss, self.atk * 20, is_active=True, team=team))
+        logs.extend(hero_deal_damage(self, boss, self.atk * (20+self.skill_damage/100), is_active=True, team=team))
         logs.append(f"{self.name} reduces {boss.name}'s energy by 50.")
         boss.energy = max(boss.energy - 50, 0)
 
@@ -49,7 +49,7 @@ class PDE(Hero):
         if self.has_fear:
             logs.append(f"{self.name} is feared and fails basic attack.")
             return logs
-        logs.extend(hero_deal_damage(self, boss, self.atk * 20, is_active=False, team=team))
+        logs.extend(hero_deal_damage(self, boss, self.atk * (20+self.skill_damage/100), is_active=False, team=team))
         target = min([h for h in team.heroes if h.is_alive()], key=lambda h: h.hp, default=self)
 
         self.add_or_update_buff(target, "mystical_veil", {"layers": 1, "rounds": 9999})

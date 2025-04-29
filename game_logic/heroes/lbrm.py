@@ -47,7 +47,7 @@ class LBRM(Hero):
             self.energy += 50
             return self.active_skill(boss, team)
         extra = min(int(0.15 * boss.hp), int(30 * self.atk))
-        logs.extend(hero_deal_damage(self, boss, self.atk * 10, is_active=False, team=team))
+        logs.extend(hero_deal_damage(self, boss, self.atk * (10+self.skill_damage/100), is_active=False, team=team))
         logs.append(f"➕ {self.name} deals additional {extra} flat damage from Magnification.")
         boss.hp -= extra
         return logs
@@ -57,7 +57,7 @@ class LBRM(Hero):
             return []
         self.ctrl_removal_limit = min(2, self.ctrl_removal_limit + 1)
         logs = []
-        logs.extend(hero_deal_damage(self, boss, self.atk * 24, is_active=True, team=team))
+        logs.extend(hero_deal_damage(self, boss, self.atk * (24+self.skill_damage/100), is_active=True, team=team))
         logs.append("🔻 Boss -15 Control Immunity (3 rounds).")
         boss.apply_buff("ctrl_immunity_down", {"decrease": 15, "rounds": 3})
 

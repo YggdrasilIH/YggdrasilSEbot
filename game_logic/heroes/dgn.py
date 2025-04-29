@@ -35,11 +35,11 @@ class DGN(Hero):
             logs.append(f"{self.name} is silenced and cannot use active skill.")
             return logs
 
-        base = self.atk * 14
+        base = self.atk * (14+self.skill_damage/100)
         logs.extend(hero_deal_damage(self, boss, base, is_active=True, team=team, allow_counter=True, allow_crit=True))
 
         count = sum(1 for b in boss.buffs.values() if BuffHandler.is_attribute_reduction(b, strict=True))
-        bonus = self.atk * 10 * count
+        bonus = self.atk * (10+self.skill_damage/100) * count
         if bonus:
             logs.extend(hero_deal_damage(self, boss, bonus, is_active=True, team=team, allow_counter=False, allow_crit=True))
 
@@ -92,14 +92,14 @@ class DGN(Hero):
             logs.append(f"{self.name} is feared and cannot perform basic attack.")
             return logs
 
-        logs.extend(hero_deal_damage(self, boss, self.atk * 12, is_active=False, team=team, allow_counter=True, allow_crit=True))
+        logs.extend(hero_deal_damage(self, boss, self.atk * (12+self.skill_damage/100), is_active=False, team=team, allow_counter=True, allow_crit=True))
 
         count = sum(1 for b in boss.buffs.values() if BuffHandler.is_attribute_reduction(b, strict=True))
-        bonus = self.atk * 10 * count
+        bonus = self.atk * (10+self.skill_damage/100) * count
         if bonus:
             logs.extend(hero_deal_damage(self, boss, bonus, is_active=False, team=team, allow_counter=False, allow_crit=True))
 
-        total = self.atk * 12 + bonus
+        total = self.atk * (12+self.skill_damage/100) + bonus
         shield = int(total * 0.5)
         buffs_applied = []
 
@@ -172,7 +172,7 @@ class DGN(Hero):
 
             # Correctly count only debuffs
             debuff_count = sum(1 for b in enemy.buffs.values() if isinstance(b, dict) and BuffHandler.is_attribute_reduction(b, strict=True))
-            bonus = self.atk * 20 * debuff_count
+            bonus = self.atk * (20+self.skill_damage/100) * debuff_count
             logs.extend(hero_deal_damage(self, enemy, bonus, is_active=True, team=team, allow_counter=False, allow_crit=False))
 
         # Bonus damage based on target debuffs

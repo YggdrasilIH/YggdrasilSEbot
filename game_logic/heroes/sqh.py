@@ -43,7 +43,7 @@ class SQH(Hero):
             logs.append(f"{self.name} is silenced and cannot use active skill.")
             return logs
 
-        dmg = self.atk * 18
+        dmg = self.atk * (18+self.skill_damage/100)
         logs.extend(hero_deal_damage(self, boss, dmg, is_active=True, team=team, allow_counter=True, allow_crit=True))
 
         effects = []
@@ -98,7 +98,7 @@ class SQH(Hero):
             logs.append(f"{self.name} is feared and cannot use basic attack.")
             return logs
 
-        dmg = self.atk * 12
+        dmg = self.atk * (12+self.skill_damage/100)
         logs.extend(hero_deal_damage(self, boss, dmg, is_active=False, team=team, allow_counter=True, allow_crit=True))
 
         buff_logs = []

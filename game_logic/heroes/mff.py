@@ -27,9 +27,9 @@ class MFF(Hero):
             logs.append(f"{self.name} is silenced and cannot use active skill.")
             return logs
 
-        logs.extend(hero_deal_damage(self, boss, self.atk * 16, is_active=True, team=team))
+        logs.extend(hero_deal_damage(self, boss, self.atk * (16+self.skill_damage), is_active=True, team=team))
 
-        poison_damage = int(self.atk * 12)
+        poison_damage = int(self.atk * (12+self.skill_damage/100))
         logs.append(f"☠️ Applies Poison: {poison_damage} for 3 rounds.")
         logs.extend(BuffHandler.apply_debuff(boss, "poison", {
             "attribute": "poison", "damage": poison_damage, "rounds": 3
@@ -74,7 +74,7 @@ class MFF(Hero):
             logs.append(f"{self.name} is feared and cannot use basic attack.")
             return logs
 
-        logs.extend(hero_deal_damage(self, boss, self.atk * 10, is_active=False, team=team))
+        logs.extend(hero_deal_damage(self, boss, self.atk * (10+self.skill_damage/100), is_active=False, team=team))
         poison_damage = int(self.atk * 5.6)
         logs.append(f"☠️ Applies Poison: {poison_damage} for 2 rounds.")
         logs.extend(BuffHandler.apply_debuff(boss, "poison", {
