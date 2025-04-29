@@ -8,11 +8,11 @@ class Boss:
         self.name = "Boss"
         self.max_hp = 20_000_000_000_000_000_000
         self.hp = self.max_hp
-        self.atk = 20_000_000
-        self.base_atk = 20_000_000
+        self.atk = 1_000_000_000
+        self.base_atk = 1_000_000_000
         self.dr = 0
         self.ADR = 0
-        self.armor = 0000
+        self.armor = 0
         self.speed = 0
         self.control_immunity = 0
         self.crit_rate = 0

@@ -1,7 +1,7 @@
 # debugfast_average.py
 
 from game_logic import Hero, Boss, Team
-from game_logic.artifacts import Scissors, DB, Mirror, Antlers
+from game_logic.artifacts import Scissors, DB, Mirror, Antlers, dDB, dMirror
 from game_logic.cores import PDECore
 from game_logic.pets import Phoenix
 from game_logic.lifestar import Specter
@@ -36,12 +36,12 @@ def create_team_and_boss():
     active_core = PDECore()
 
     data = [
-        ("hero_MFF_Hero", 11e9, 6e7, 3800, "CP", "UW", DB(), 15, 0, 0, 0, 0, 0, 0, 59, 40, 8000),
-        ("hero_SQH_Hero", 12e9, 7e7, 3670, "CP", "UW", Mirror(), 15, 0, 0, 0, 0, 0, 0, 59, 40, 9000),
-        ("hero_LFA_Hero", 20e9, 1.75e8, 3540, "MP", "BS", Antlers(), 15, 100, 150, 150, 500, 150, 150, 0, 16, 8999),
-        ("hero_DGN_Hero", 14e9, 9e7, 3300, "CP", "UW", Scissors(), 15, 0, 0, 0, 0, 0, 0, 59, 16, 79999),
-        ("hero_PDE_Hero", 9e9, 6e7, 2300, "CP", "UW", Scissors(), 15, 0, 0, 0, 0, 0, 0, 59, 40, 8444),
-        ("hero_LBRM_Hero", 9.9e9, 5e7, 2000, "CP", "UW", Mirror(), 14, 0, 0, 0, 0, 0, 0, 59, 46, 8000)
+        ("hero_MFF_Hero", 11e11, 6e7, 3800, "CP", "UW", dDB(), 15, 0, 0, 0, 0, 0, 0, 59, 40, 8000),
+        ("hero_SQH_Hero", 12e11, 7e7, 3670, "CP", "UW", dMirror(), 15, 0, 0, 0, 0, 0, 0, 59, 40, 9000),
+        ("hero_LFA_Hero", 20e11, 1.75e8, 3540, "MP", "BS", Antlers(), 15, 60, 150, 150, 500, 150, 150, 0, 16, 8999),
+        ("hero_DGN_Hero", 14e11, 9e7, 3300, "CP", "UW", Scissors(), 15, 0, 0, 0, 0, 0, 0, 59, 16, 79999),
+        ("hero_PDE_Hero", 9e11, 6e7, 2300, "CP", "UW", Scissors(), 15, 0, 0, 0, 0, 0, 0, 59, 40, 8444),
+        ("hero_LBRM_Hero", 9.9e11, 5e7, 2000, "CP", "UW", dMirror(), 14, 0, 0, 0, 0, 0, 0, 59, 46, 8000)
     ]
 
     heroes = []
@@ -86,8 +86,13 @@ def run_debugfast_average():
     hero_totals = {}
     boss_totals = []
 
+    best_damage = -float('inf')
+    worst_damage = float('inf')
+    best_sim = None
+    worst_sim = None
+
     with suppress_stdout():  # 🔇 No spam inside simulation
-        for _ in range(num_simulations):
+        for sim_num in range(num_simulations):
             team, boss, heroes = create_team_and_boss()
 
             for hero in heroes:
@@ -112,6 +117,14 @@ def run_debugfast_average():
             team_total = sum(h.total_damage_dealt for h in heroes)
             boss_totals.append(team_total)
 
+            # Track best and worst
+            if team_total > best_damage:
+                best_damage = team_total
+                best_sim = [h.total_damage_dealt for h in heroes]
+            if team_total < worst_damage:
+                worst_damage = team_total
+                worst_sim = [h.total_damage_dealt for h in heroes]
+
     # 🧠 OUTSIDE suppress_stdout → safe to print
     print("\n🏹 FINAL AVERAGE SUMMARY (across {} battles)\n".format(num_simulations))
     team_total_avg = sum(boss_totals) / num_simulations
@@ -132,6 +145,11 @@ def run_debugfast_average():
         total_str = f"{team_total_avg / 1e9:6.2f}B"
 
     print(f"\n🏆 Average Total Team Damage: {total_str}")
+
+    # 🏆 Output best and worst battle results
+    print(f"\n⭐ Best Single Battle: {best_damage:.2e}")
+    print(f"📉 Worst Single Battle: {worst_damage:.2e}")
+
 
 if __name__ == "__main__":
     run_debugfast_average()

@@ -15,7 +15,7 @@ def hero_deal_damage(source, target, base_damage, is_active, team, allow_counter
     # Phase 1: Base scaling
     damage = base_damage
     if crit:
-        damage *= 2 + (crit_dmg / 100)
+        damage *= 1.5 + (crit_dmg / 100)*2
     damage *= (1 + source.hd * 0.007)
     damage *= (1 + precision * 0.003)
     damage *= (1 + source.all_damage_dealt / 100)
