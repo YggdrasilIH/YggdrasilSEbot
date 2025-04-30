@@ -50,8 +50,13 @@ class Phoenix(Pet):
         })
 
         # Set special burn-damage buff for heroes
-        for hero in team.heroes:
-            hero.phoenix_burn_bonus_rounds = 3  # custom tracking
+        import random
+        eligible = [h for h in team.heroes if h.is_alive()]
+        selected = random.sample(eligible, min(4, len(eligible)))
+        for hero in selected:
+            hero.phoenix_burn_bonus_rounds = 3
+        logs.append(f"🔥 Phoenix grants burn bonus to: {', '.join(h.name for h in selected)} (80% vs burning targets for 3 rounds).")
+
 
         logs.append(f"🔥 Phoenix uses active and heroes gain 80% increased damage against burning targets (3 rounds).")
         self.energy = 0

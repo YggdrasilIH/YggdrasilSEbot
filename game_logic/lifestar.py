@@ -1,6 +1,132 @@
 import random
 from game_logic.buff_handler import BuffHandler
 from utils.log_utils import group_team_buffs
+from game_logic.damage_utils import apply_burn
+
+class Nova:
+    def __init__(self):
+        self.star_soul_count = 0
+        self.pending_burst = False
+        self.burn_retaliation_count = 0
+
+    def start_of_round(self, hero, team, boss, round_num):
+        logs = [f"✨ Start of Round {round_num} for {hero.name} (Nova)"]
+        return logs
+
+    def end_of_round(self, hero, team, boss, round_num):
+        logs = [f"🖚 End of Round {round_num} for {hero.name} (Nova)"]
+        buffs_applied = []
+
+        for enemy in [boss] + getattr(boss, "heroes", []):
+            if not enemy.is_alive():
+                continue
+            BuffHandler.apply_debuff(enemy, "blazing_nova", {
+                "attribute": "blazing_nova",
+                "bonus": 0,
+                "rounds": 1
+            })
+            BuffHandler.apply_debuff(enemy, "blazing_nova_block_down", {
+                "attribute": "block",
+                "bonus": -60,
+                "rounds": 1
+            })
+            BuffHandler.apply_debuff(enemy, "blazing_nova_dodge_down", {
+                "attribute": "dodge",
+                "bonus": -30,
+                "rounds": 1
+            })
+            buffs_applied.append((enemy.name, "-60% Block, -30% Dodge (Blazing Nova)"))
+
+        if buffs_applied:
+            logs.append("✨ Nova Passive: Blazing Nova applied to enemies:")
+            logs.extend(group_team_buffs(buffs_applied))
+
+        return logs
+
+    def on_after_action(self, hero, team, boss):
+        if hero.has_seal_of_light:
+            return ["❌ Nova Star Soul Skill blocked by Seal of Light."]
+
+        logs = []
+        self.star_soul_count += 1
+        logs.append(f"🌠 {hero.name} triggers **Nova** Star Soul Skill.")
+
+        logs.extend(self.apply_star_soul_skill(hero, team, boss))
+
+        if self.star_soul_count >= 3:
+            self.pending_burst = True
+            logs.append("💫 **Star Soul Burst** is now primed and will activate after next action.")
+
+        if self.pending_burst:
+            logs.extend(self.apply_star_soul_burst(hero, team, boss))
+            self.pending_burst = False
+            self.star_soul_count = 0
+
+        return logs
+
+    def apply_star_soul_skill(self, hero, team, boss):
+        logs = []
+        enemies = [boss] + getattr(boss, "heroes", [])
+        enemies = [e for e in enemies if e.is_alive()]
+        if not enemies:
+            return logs
+
+        highest_hp_target = max(enemies, key=lambda e: e.hp)
+        blazing_targets = [e for e in enemies if any(b.get("attribute") == "blazing_nova" for b in e.buffs.values())]
+        random_blazing = random.choice(blazing_targets) if blazing_targets else None
+
+        for target in [highest_hp_target, random_blazing]:
+            if target:
+                logs.extend(apply_burn(target, int(hero.max_hp * 0.33), 2, source=hero, label="Nova Burn"))
+
+        return logs
+
+    def apply_star_soul_burst(self, hero, team, boss):
+        logs = [f"🌟 {hero.name} unleashes **Nova Star Soul Burst**!"]
+
+        enemies = [boss] + getattr(boss, "heroes", [])
+        enemies = [e for e in enemies if e.is_alive()]
+
+        for enemy in enemies:
+            logs.extend(apply_burn(enemy, int(hero.max_hp * 0.33), 3, source=hero, label="Nova Burst DOT"))
+            if any(b.get("attribute") == "blazing_nova" for b in enemy.buffs.values()):
+                logs.extend(apply_burn(enemy, int(hero.max_hp * 0.33), 3, source=hero, label="Bonus Nova DOT"))
+
+        hero.energy += 100
+        logs.append(f"⚡ {hero.name} gains +100 Energy from Nova Burst.")
+
+        alive_allies = [h for h in team.heroes if h.is_alive() and h != hero]
+        chosen = random.sample(alive_allies, min(4, len(alive_allies)))
+        for ally in chosen:
+            for _ in range(3):
+                BuffHandler.apply_buff(ally, f"nova_heal_{random.randint(1000,9999)}", {
+                    "attribute": "regen",
+                    "heal_amount": int(hero.max_hp * 0.33),
+                    "rounds": 1
+                })
+                logs.append(f"🢕 {ally.name} receives 33% Max HP healing from Nova Burst.")
+
+        return logs
+
+    def on_receive_attack(self, hero, attacker, boss):
+        logs = []
+        if not attacker.is_alive():
+            return logs
+        if any(b.get("attribute") == "blazing_nova" for b in attacker.buffs.values()):
+            logs.append(f"🔥 {attacker.name} has Blazing Nova and triggers retaliation.")
+            logs.extend(apply_burn(attacker, int(hero.max_hp * 0.33), 2, source=hero, label="Nova Retaliation DOT"))
+            self.burn_retaliation_count += 1
+
+            if self.burn_retaliation_count >= 3:
+                logs.append(f"🔥 {hero.name}'s retaliation counter reaches 3 → AOE burn triggered.")
+                enemies = [boss] + getattr(boss, "heroes", [])
+                for enemy in enemies:
+                    if enemy.is_alive():
+                        logs.extend(apply_burn(enemy, int(hero.max_hp * 0.33), 2, source=hero, label="Nova Passive AOE"))
+                self.burn_retaliation_count = 0
+        return logs
+
+
 
 class Specter:
     def __init__(self):
@@ -39,24 +165,45 @@ class Specter:
             logs.append(f"❌ {hero.name}'s **Specter** end-of-round effects are blocked by **Seal of Light**.")
             return logs
 
-        reductions = [(name, data) for name, data in hero.buffs.items() if isinstance(data, dict) and "attribute" in data and "bonus" in data and data["bonus"] < 0]
-        if reductions:
-            convert_target = random.choice(reductions)
-            attr = convert_target[1]["attribute"]
-            bonus_val = abs(convert_target[1]["bonus"])
-            remaining_rounds = convert_target[1].get("rounds", 2)
-            hero.buffs.pop(convert_target[0])
-            BuffHandler.apply_buff(hero, f"specter_convert_{attr}", {"attribute": attr, "bonus": bonus_val, "rounds": remaining_rounds})
-            buffs_applied.append((hero.name, f"Converted {attr}: +{bonus_val}"))
-            remaining = [r for r in reductions if r != convert_target]
-            if remaining and random.random() < 0.3:
-                second = random.choice(remaining)
-                attr = second[1]["attribute"]
-                bonus_val = abs(second[1]["bonus"])
-                remaining_rounds = second[1].get("rounds", 2)
-                hero.buffs.pop(second[0])
-                BuffHandler.apply_buff(hero, f"specter_convert_{attr}_extra", {"attribute": attr, "bonus": bonus_val, "rounds": remaining_rounds})
-                buffs_applied.append((hero.name, f"Converted {attr}: +{bonus_val} (Bonus)") )
+        # Group all reductions by attribute (e.g., all -atk, all -armor)
+        from collections import defaultdict
+
+        attr_reduction_groups = defaultdict(list)
+        for name, data in hero.buffs.items():
+            if isinstance(data, dict) and "attribute" in data and "bonus" in data and data["bonus"] < 0:
+                attr_reduction_groups[data["attribute"]].append((name, data))
+
+        # Convert one full stack
+        logs = []
+        converted_attrs = []
+        if attr_reduction_groups:
+            chosen_attr = random.choice(list(attr_reduction_groups.keys()))
+            for name, debuff in attr_reduction_groups[chosen_attr]:
+                hero.buffs.pop(name)
+            total_bonus = sum(abs(d["bonus"]) for _, d in attr_reduction_groups[chosen_attr])
+            duration = max(d.get("rounds", 2) for _, d in attr_reduction_groups[chosen_attr])
+            BuffHandler.apply_buff(hero, f"specter_convert_{chosen_attr}", {
+                "attribute": chosen_attr,
+                "bonus": total_bonus,
+                "rounds": duration
+            })
+            logs.append(f"🔄 {hero.name} converts all reductions of {chosen_attr} (+{total_bonus}) for {duration} rounds.")
+            converted_attrs.append(chosen_attr)
+
+        # 30% chance to convert another different attribute stack
+        remaining_attrs = [attr for attr in attr_reduction_groups if attr not in converted_attrs]
+        if remaining_attrs and random.random() < 0.3:
+            second_attr = random.choice(remaining_attrs)
+            for name, debuff in attr_reduction_groups[second_attr]:
+                hero.buffs.pop(name)
+            total_bonus = sum(abs(d["bonus"]) for _, d in attr_reduction_groups[second_attr])
+            duration = max(d.get("rounds", 2) for _, d in attr_reduction_groups[second_attr])
+            BuffHandler.apply_buff(hero, f"specter_convert_{second_attr}_extra", {
+                "attribute": second_attr,
+                "bonus": total_bonus,
+                "rounds": duration
+            })
+            logs.append(f"✨ {hero.name} converts another reduction stack of {second_attr} (+{total_bonus}) for {duration} rounds (30% bonus proc).")
 
         if round_num <= 5:
             burst_logs = self.grant_burst_buffs(hero, team, round_num)

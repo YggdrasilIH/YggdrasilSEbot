@@ -248,16 +248,16 @@ class Hero:
 
         messages.extend(BuffHandler.cap_stats(self))
 
-        if self.artifact and hasattr(self.artifact, "apply_end_of_round"):
-            artifact_logs = self.artifact.apply_end_of_round(self, team, boss, round_num)
-            if artifact_logs:
-                messages.extend(artifact_logs)
-
         # ✅ Purify Enable (Control, Attribute Reduction, Mark)
         if self.purify_enable and hasattr(self.purify_enable, "apply_end_of_round"):
             purify_result = self.purify_enable.apply_end_of_round(self, boss)
             if purify_result:
                 messages.append(purify_result)
+
+        if self.artifact and hasattr(self.artifact, "apply_end_of_round"):
+            artifact_logs = self.artifact.apply_end_of_round(self, team, boss, round_num)
+            if artifact_logs:
+                messages.extend(artifact_logs)
 
         messages.append(f"📉 {self.get_status_description()}")
         return messages

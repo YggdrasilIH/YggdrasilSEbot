@@ -2,6 +2,8 @@ from game_logic.foresight import apply_foresight
 from game_logic.heroes.mff import MFF
 from game_logic.buff_handler import grant_energy, BuffHandler
 from utils.log_utils import group_team_buffs
+from game_logic.lifestar import Nova
+
 
 CONTROL_EFFECTS = {"fear", "silence", "seal of light"}
 
@@ -102,7 +104,11 @@ class Team:
                         logs.extend(group_team_buffs(buffs_applied))
                     logs.extend(skill_logs)
                     if hero.lifestar and hasattr(hero.lifestar, "on_after_action"):
-                        logs.extend(hero.lifestar.on_after_action(hero, self))
+                        if isinstance(hero.lifestar, Nova):
+                            logs.extend(hero.lifestar.on_after_action(hero, self, boss))
+                        else:
+                            logs.extend(hero.lifestar.on_after_action(hero, self))
+
                     if hero.artifact and hasattr(hero.artifact, "on_active_skill"):
                         logs.extend(hero.artifact.on_active_skill(self, boss))
                     logs.extend(self.trigger_mff_passive(hero, boss))
@@ -119,7 +125,11 @@ class Team:
                     skill_logs = hero.basic_attack(boss, self)
                     logs.extend(skill_logs)
                     if hero.lifestar and hasattr(hero.lifestar, "on_after_action"):
-                        logs.extend(hero.lifestar.on_after_action(hero, self))
+                        if isinstance(hero.lifestar, Nova):
+                            logs.extend(hero.lifestar.on_after_action(hero, self, boss))
+                        else:
+                            logs.extend(hero.lifestar.on_after_action(hero, self))
+
                     logs.extend(self.trigger_mff_passive(hero, boss))
                     logs.extend(apply_foresight(hero, "basic"))
                     logs.append(grant_energy(hero, 50))
@@ -130,6 +140,18 @@ class Team:
 
         boss_logs = boss.boss_action(self.heroes, round_num)
         logs.extend(boss_logs)
+
+        # 🔥 Nova's retaliation passive on being hit
+        for line in boss_logs:
+            for hero in self.heroes:
+                if not hero.is_alive():
+                    continue
+                if hero.lifestar and hasattr(hero.lifestar, "on_receive_attack"):
+                    attacker = boss  # Currently only boss attacks
+                    retaliation_logs = hero.lifestar.on_receive_attack(hero, attacker, boss)
+                    if retaliation_logs:
+                        logs.extend(retaliation_logs)
+
 
         crit_hit_heroes = [h for h in self.heroes if h.is_alive()]
         crit_occurred = any("CRIT" in str(line) and any(h.name in str(line) for h in crit_hit_heroes) for line in boss_logs)
@@ -181,11 +203,6 @@ class Team:
                 # ✅ Call hero.end_of_round, let hero handle process_buffs inside
                 if hasattr(hero, "end_of_round"):
                     logs += hero.end_of_round(boss, self, round_num)
-
-                if hero.purify_enable and hasattr(hero.purify_enable, "apply_end_of_round"):
-                    result = hero.purify_enable.apply_end_of_round(hero, boss)
-                    if result:
-                        logs.append(result)
 
                 if hasattr(hero, "lifestar") and hero.lifestar and hasattr(hero.lifestar, "end_of_round"):
                     logs += hero.lifestar.end_of_round(hero, self, boss, round_num)

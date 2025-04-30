@@ -3,6 +3,21 @@ from utils.log_utils import stylize_log
 import random
 from math import floor
 
+def apply_burn(target, damage, rounds, source=None, label="Burn"):
+    logs = []
+    burn_entry = {
+        "attribute": "burn",
+        "damage": damage,
+        "rounds": rounds
+    }
+
+    if hasattr(target, "poison_effects"):
+        target.poison_effects.append(burn_entry)
+        logs.append(f"🔥 {target.name} is burned for {damage // 1_000_000}M over {rounds} rounds. ({label})")
+    else:
+        logs.append(f"⚠️ Burn failed: {target.name} has no poison_effects list.")
+    return logs
+
 def hero_deal_damage(source, target, base_damage, is_active, team, allow_counter=True, allow_crit=True):
     logs = []
     if not target.is_alive():
@@ -43,8 +58,21 @@ def hero_deal_damage(source, target, base_damage, is_active, team, allow_counter
 
     defier = 0.30 if getattr(source, "defier", False) and target.hp >= 0.70 * target.max_hp else 0
 
+    hp_bonus = 0
+    if target.hp > source.hp:
+        hp_bonus = 0.12
+        logs.append(f"🟥 {source.name} gains +12% bonus vs higher-HP target.")
+
+    # Maim: +30% damage at 0 HP, scaling linearly with HP lost
+    maim_bonus = 0
+    if target.max_hp > 0:
+        hp_percent = target.hp / target.max_hp
+        maim_bonus = round((1 - hp_percent) * 0.30, 4)
+        if maim_bonus > 0:
+            logs.append(f"🪓 {source.name} gains +{int(maim_bonus * 100)}% Maim bonus (target at {int(hp_percent * 100)}% HP).")
+
     # Final Phase 2 multiplier
-    phase2_multiplier = (1 + poison_bonus) * (1 + burn_bonus) * (1 + gk) * (1 + defier)
+    phase2_multiplier = (1 + poison_bonus) * (1 + burn_bonus) * (1 + gk) * (1 + defier)* (1 + hp_bonus) * (1 + maim_bonus)
     damage = int(phase1 * phase2_multiplier)
 
     # 🆕 DT outgoing bonus

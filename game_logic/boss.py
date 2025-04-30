@@ -11,6 +11,8 @@ class Boss:
         self.atk = 1_000_000_000
         self.base_atk = 1_000_000_000
         self.dr = 0
+        self.block = 0
+        self.dodge = 0
         self.ADR = 0
         self.armor = 0
         self.speed = 0
