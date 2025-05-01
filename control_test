@@ -1,0 +1,102 @@
+import sys
+import os
+from contextlib import contextmanager
+from collections import defaultdict
+from game_logic import Hero, Boss, Team
+from game_logic.artifacts import Mirror, DB, Antlers
+from game_logic.cores import PDECore
+from game_logic.enables import ControlPurify, MarkPurify, BalancedStrike, UnbendingWill
+from game_logic.pets import Phoenix
+
+# 🚹 Suppress stdout during simulation
+@contextmanager
+def suppress_stdout():
+    original_stdout = sys.stdout
+    sys.stdout = open(os.devnull, 'w')
+    try:
+        yield
+    finally:
+        sys.stdout.close()
+        sys.stdout = original_stdout
+
+purify_mapping = {
+    "CP": ControlPurify(),
+    "MP": MarkPurify()
+}
+trait_mapping = {
+    "BS": BalancedStrike(),
+    "UW": UnbendingWill()
+}
+
+def run_control_test():
+    global active_core
+    active_core = PDECore()
+
+    data = [
+        ("hero_LBRM_Hero", 9e9, 50e6, 2200, "MP", "UW", Mirror()),
+        ("hero_PDE_Hero", 9e9, 50e6, 2100, "MP", "UW", Mirror()),
+        ("hero_MFF_Hero", 11e9, 60e6, 2000, "MP", "UW", DB()),
+        ("hero_DGN_Hero", 14e9, 80e6, 1900, "MP", "UW", DB()),
+        ("hero_LFA_Hero", 12e9, 65e6, 1800, "MP", "BS", Antlers()),
+        ("hero_SQH_Hero", 12e9, 65e6, 1700, "CP", "UW", DB())
+    ]
+
+    heroes = []
+    for hid, hp, atk, spd, purify, trait, artifact in data:
+        h = Hero.from_stats(hid, [hp, atk, spd], artifact=artifact, lifestar=None)
+        h.set_enables(purify_mapping[purify], trait_mapping[trait])
+        h.gk = h.defier = True
+        h.total_damage_dealt = 0
+        heroes.append(h)
+
+    team = Team(heroes, heroes[:2], heroes[2:], pet=Phoenix())
+    boss = Boss()
+
+    control_tracker = defaultdict(lambda: {"fear": 0, "silence": 0, "seal": 0, "immune": 0, "cleansed": 0, "purify": 0})
+    calamity_tracker = defaultdict(list)
+
+    with suppress_stdout():
+        for round_num in range(1, 6):
+            for h in heroes:
+                h.energy += 50
+                if h.lifestar and hasattr(h.lifestar, "start_of_round"):
+                    h.lifestar.start_of_round(h, team, boss, round_num)
+
+            logs = team.perform_turn(boss, round_num)
+            logs += boss.end_of_round_effects(team.heroes, round_num)
+            logs += team.end_of_round(boss, round_num)
+
+            for log in logs:
+                if not isinstance(log, str):
+                    continue
+                for h in heroes:
+                    if h.name in log:
+                        if "😱 Fear" in log:
+                            control_tracker[h.name]["fear"] += 1
+                        if "👇 Silence" in log:
+                            control_tracker[h.name]["silence"] += 1
+                        if "🔒 Seal of Light" in log:
+                            control_tracker[h.name]["seal"] += 1
+                        if "resists" in log or "is immune to" in log:
+                            control_tracker[h.name]["immune"] += 1
+                        if "removes 1 control effect" in log or "cleanses" in log:
+                            control_tracker[h.name]["cleansed"] += 1
+                        if "Enable Purify" in log:
+                            control_tracker[h.name]["purify"] += 1
+
+            for h in heroes:
+                calamity_tracker[h.name].append(h.calamity)
+
+    print("\n📊 Control Effect Summary (Total over 5 rounds):")
+    print("Hero   | Fear | Silence | Seal | Immune | Cleansed | Purify")
+    print("-----------------------------------------------------------")
+    for h in heroes:
+        c = control_tracker[h.name]
+        print(f"{h.name:<6} | {c['fear']:<4} | {c['silence']:<7} | {c['seal']:<4} | {c['immune']:<6} | {c['cleansed']:<8} | {c['purify']}")
+
+    print("\n🔥 Calamity Tracker:")
+    for h in heroes:
+        print(f"{h.name:<6}: {calamity_tracker[h.name]}")
+
+if __name__ == "__main__":
+    run_control_test()

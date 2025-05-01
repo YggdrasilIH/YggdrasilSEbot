@@ -38,7 +38,7 @@ def create_team_and_boss():
     data = [
         ("hero_MFF_Hero", 11e11, 6e7, 3800, "CP", "UW", dDB(), 15, 0, 0, 0, 0, 0, 0, 59, 40, 8000),
         ("hero_SQH_Hero", 12e11, 7e7, 3670, "CP", "UW", dMirror(), 15, 0, 0, 0, 0, 0, 0, 59, 40, 9000),
-        ("hero_LFA_Hero", 20e11, 1.75e8, 3540, "MP", "BS", Antlers(), 15, 30, 150, 150, 600, 150, 150, 0, 16, 8999),
+        ("hero_LFA_Hero", 20e11, 1.75e8, 3540, "CP", "BS", Antlers(), 15, 30, 150, 150, 600, 150, 150, 0, 16, 8999),
         ("hero_PDE_Hero", 9e11, 6e7, 2300, "CP", "UW", Scissors(), 15, 0, 0, 0, 0, 0, 0, 59, 40, 8444),
         ("hero_LBRM_Hero", 9.9e11, 5e7, 2000, "CP", "UW", Scissors(), 14, 0, 0, 0, 0, 0, 0, 59, 46, 8000),
         ("hero_DGN_Hero", 14e11, 9e7, 3300, "CP", "UW", Scissors(), 15, 0, 0, 0, 0, 0, 0, 59, 16, 79999)
