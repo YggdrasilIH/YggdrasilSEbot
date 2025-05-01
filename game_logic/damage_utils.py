@@ -106,14 +106,13 @@ def hero_deal_damage(source, target, base_damage, is_active, team, allow_counter
     damage *= (1 - dr)
     damage *= (1 - adr)
 
-    # Shield
+    # ✅ Shield absorption with logging
     if target.shield > 0:
-        if target.shield >= damage:
-            target.shield -= damage
-            damage = 0
-        else:
-            damage -= target.shield
-            target.shield = 0
+        absorbed = min(target.shield, damage)
+        target.shield -= absorbed
+        damage -= absorbed
+        logs.append(f"🛡️ {target.name} absorbs {absorbed // 1_000_000}M damage with Shield.")
+
 
     # Unbending Will
     if hasattr(target, "trait_enable") and hasattr(target.trait_enable, "prevent_death"):

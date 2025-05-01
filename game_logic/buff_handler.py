@@ -44,81 +44,106 @@ class BuffHandler:
     @staticmethod
     def apply_buff(hero, buff_name, buff_data, boss=None):
         attr = buff_data.get("attribute")
+        bonus = buff_data.get("bonus", 0)
 
-        # Check if offsettable by Curse of Decay
+        # 🔁 Alias map: buff keys → actual hero attribute names
+        ATTRIBUTE_ALIASES = {
+            "control_immunity": "ctrl_immunity",
+            "crit_damage": "crit_dmg",
+            "crit_rate": "crit_rate",
+            "dr": "DR",
+            "adr": "ADR"
+        }
+
+        # 🔁 Use alias if defined
+        internal_attr = ATTRIBUTE_ALIASES.get(attr, attr)
+
         if BuffHandler.is_attribute_buff(buff_data) and hero.curse_of_decay > 0:
             if boss and hasattr(boss, "apply_curse_of_decay_damage"):
                 cod_logs = []
                 boss.apply_curse_of_decay_damage(hero, cod_logs)
-                msg = f"💀 Curse of Decay offsets {buff_data['attribute']} buff on {hero.name}. " + " ".join(cod_logs)
+                msg = f"💀 Curse of Decay offsets {attr} buff on {hero.name}. " + " ".join(cod_logs)
             else:
                 damage = int(boss.atk * 30) if boss else 0
-                hero.hp -= damage
-                msg = f"💀 Curse of Decay offsets {buff_data['attribute']} buff on {hero.name}. {hero.name} takes {damage / 1e6:.0f}M dmg."
+                if hasattr(hero, "take_damage"):
+                    cod_msg = hero.take_damage(damage, source_hero=boss, team=hero.team if hasattr(hero, "team") else None)
+                    cod_logs = cod_msg if isinstance(cod_msg, list) else [cod_msg]
+                else:
+                    hero.hp -= damage
+                    cod_logs = [f"{hero.name} takes {damage / 1e6:.0f}M damage."]
+                msg = f"💀 Curse of Decay offsets {attr} buff on {hero.name}. " + " ".join(cod_logs)
             hero.curse_of_decay -= 1
             return False, msg
 
-        # --- Stacking Logic with safety ---
+
+        # Stack or overwrite buff
         if buff_name in hero.buffs:
             existing = hero.buffs[buff_name]
-            # If merging same attribute
-            if "attribute" in existing and "attribute" in buff_data and existing["attribute"] == attr:
-                # Merge bonuses carefully
-                existing_bonus = existing.get("bonus", 0)
-                incoming_bonus = buff_data.get("bonus", 0)
-                existing["bonus"] = existing_bonus + incoming_bonus
+            if "attribute" in existing and existing["attribute"] == attr:
+                existing["bonus"] = existing.get("bonus", 0) + bonus
             else:
-                # Otherwise, overwrite safely
                 hero.buffs[buff_name] = buff_data
-
-            # Heal stacking
             if "heal_amount" in existing and "heal_amount" in buff_data:
                 existing["heal_amount"] += buff_data["heal_amount"]
-
-            # Shield stacking
             if "shield" in existing and "shield" in buff_data:
                 existing["shield"] += buff_data["shield"]
-
-            # Extend rounds if needed
             if "rounds" in existing and "rounds" in buff_data:
                 existing["rounds"] = max(existing["rounds"], buff_data["rounds"])
         else:
             hero.buffs[buff_name] = buff_data
 
-        # Apply immediate impact to hero stats if attribute matches
-        bonus = buff_data.get("bonus", 0)
-        if attr == "all_damage_dealt":
-            hero.all_damage_dealt += bonus
-        elif attr == "atk":
-            hero.atk += bonus
-        elif attr == "armor":
-            hero.armor += bonus
-        elif attr == "speed":
-            hero.speed += bonus
-        elif attr == "skill_damage":
-            hero.skill_damage += bonus
-        elif attr == "precision":
-            hero.precision += bonus
-        elif attr == "block":
-            hero.block += bonus
-        elif attr == "crit_rate":
-            hero.crit_rate += bonus
-        elif attr == "crit_dmg":
-            hero.crit_dmg += bonus
-        elif attr == "armor_break":
-            hero.armor_break += bonus
-        elif attr == "control_immunity":
-            hero.control_immunity += bonus
-        elif attr == "dr":
-            hero.dr += bonus
-        elif attr == "hd":
-            hero.hd += bonus
-        elif attr == "adr":
-            hero.ADR += bonus
-        elif attr == "energy":
-            hero.energy += bonus
+        # ✅ Handle shield separately with hard cap
+        if attr == "shield":
+            amount = buff_data.get("shield", 0)
+            hero.shield = min(hero.shield + amount, hero.max_hp)
+
+        # Apply bonus to stat if hero supports it
+        try:
+            if internal_attr == "all_damage_dealt":
+                hero.all_damage_dealt += bonus
+            elif internal_attr == "atk":
+                hero.atk += bonus
+            elif internal_attr == "armor":
+                hero.armor += bonus
+            elif internal_attr == "speed":
+                hero.speed += bonus
+            elif internal_attr == "skill_damage":
+                hero.skill_damage += bonus
+            elif internal_attr == "precision":
+                hero.precision += bonus
+            elif internal_attr == "block":
+                hero.block += bonus
+            elif internal_attr == "crit_rate":
+                hero.crit_rate += bonus
+            elif internal_attr == "crit_dmg":
+                hero.crit_dmg += bonus
+            elif internal_attr == "armor_break":
+                hero.armor_break += bonus
+            elif internal_attr == "ctrl_immunity":
+                if hasattr(hero, "ctrl_immunity"):
+                    hero.ctrl_immunity += bonus
+                else:
+                    hero.ctrl_immunity = bonus
+            elif internal_attr == "DR":
+                if hasattr(hero, "DR"):
+                    hero.DR += bonus
+                else:
+                    hero.DR = bonus
+            elif internal_attr == "HD":
+                hero.hd += bonus
+            elif internal_attr == "ADR":
+                if hasattr(hero, "ADR"):
+                    hero.ADR += bonus
+                else:
+                    hero.ADR = bonus
+            elif internal_attr == "energy":
+                hero.energy += bonus
+        except AttributeError:
+            pass  # Ignore unknown attributes safely
 
         return True, None
+
+
 
 
     @staticmethod

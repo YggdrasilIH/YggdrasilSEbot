@@ -105,8 +105,9 @@ class DGN(Hero):
 
         for h in team.heroes:
             if getattr(h, "bright_blessing", False) and h.is_alive():
-                h.shield += shield
-                buffs_applied.append((h.name, f"+{self.format_damage_log(shield)} Shield"))
+                actual = h.add_shield(shield)
+                buffs_applied.append((h.name, f"+{self.format_damage_log(actual)} Shield (capped)"))
+
 
         buffs = [
             (n, b) for n, b in self.buffs.items()
@@ -237,11 +238,11 @@ class DGN(Hero):
             heal = int(self.max_hp * 0.25)
             shield = int(self.max_hp * 0.25)
             self.hp = min(self.max_hp, self.hp + heal)
-            self.shield += shield
+            actual = self.add_shield(shield)
             self.apply_buff("holy_dmg_up", {"attribute": "hd", "bonus": 20, "rounds": 6})
             self.apply_buff("damage_reduction_up", {"attribute": "DR", "bonus": 0.30, "rounds": 2})
             self.apply_buff("healing_received_up", {"attribute": "healing_received", "bonus": 0.50, "rounds": 2})
-            logs.append(f"{self.name} activates Fluorescent Shield: heals {self.format_damage_log(heal)}, gains {self.format_damage_log(shield)} shield, +20% holy damage.")
+            logs.append(f"{self.name} activates Fluorescent Shield: heals {self.format_damage_log(heal)}, gains {self.format_damage_log(actual)} shield, +20% holy damage.")
 
         for ally in team.heroes:
             if getattr(ally, "bright_blessing", False) and not getattr(ally, "fluorescent_triggered", False):
@@ -250,11 +251,11 @@ class DGN(Hero):
                     heal = int(ally.max_hp * 0.25)
                     shield = int(ally.max_hp * 0.25)
                     ally.hp = min(ally.max_hp, ally.hp + heal)
-                    ally.shield += shield
+                    actual = ally.add_shield(shield)
                     ally.apply_buff("holy_dmg_up", {"attribute": "hd", "bonus": 20, "rounds": 6})
                     ally.apply_buff("damage_reduction_up", {"attribute": "DR", "bonus": 0.30, "rounds": 2})
                     ally.apply_buff("healing_received_up", {"attribute": "healing_received", "bonus": 0.50, "rounds": 2})
-                    logs.append(f"{ally.name} activates Fluorescent Shield: heals {self.format_damage_log(heal)}, gains {self.format_damage_log(shield)} shield, +20% holy damage.")
+                    logs.append(f"{ally.name} activates Fluorescent Shield: heals {self.format_damage_log(heal)}, gains {self.format_damage_log(actual)} shield, +20% holy damage.")
 
         return logs
 

@@ -22,7 +22,9 @@ class LBRM(Hero):
         self.energy -= 30
         self.power_of_dream += 1
         logs.append(clear_control_effect(target, effect))
-        target.shield += int(self.atk * 15)
+        actual = self.add_shield(int(self.atk * 15))
+        logs.append(f"🛡️ {self.name} gains {actual // 1_000_000}M shield (capped).")
+
         logs.append(f"🪽 {self.name} removes {effect.replace('_', ' ').title()} from {target.name} (manual Wings). Shield granted, +1 Power of Dream.")
         return logs
 
@@ -30,11 +32,12 @@ class LBRM(Hero):
         self.ctrl_removal_limit = 1
         self.ctrl_removal_used = False
         logs = [f"✨ {self.name} activates Mirror Magic (Wings, Magnification, Protection)."]
-        logs.extend(self.apply_attribute_buff_with_curse("ctrl_immunity", 8, boss))
+        logs.extend(self.apply_attribute_buff_with_curse("control_immunity", 8, boss))
         logs.extend(self.apply_attribute_buff_with_curse("spd", 8, boss))
         logs.extend(self.apply_attribute_buff_with_curse("all_damage_dealt", 10, boss))
-        self.shield += int(self.atk * 28)
-        logs.append(f"🛡️ {self.name}: +{int(self.atk * 28 / 1e6):.0f}M Shield (Mirror Magic).")
+        actual = self.add_shield(int(self.atk * 28))
+        logs.append(f"🛡️ {self.name} gains {actual // 1_000_000}M shield (capped).")
+
         dr_bonus = 6 * 3
         logs.extend(self.apply_attribute_buff_with_curse("DR", dr_bonus, boss))
         self.wings_effect = self.magnification_effect = self.protection_effect = True
@@ -65,7 +68,7 @@ class LBRM(Hero):
 
         ally_wings = max(team.heroes, key=lambda h: h.spd)
         BuffHandler.apply_buff(ally_wings, "wings_buff", {"attribute": "spd", "bonus": 8, "rounds": 4})
-        BuffHandler.apply_buff(ally_wings, "wings_ctrl", {"attribute": "ctrl_immunity", "bonus": 8, "rounds": 4})
+        BuffHandler.apply_buff(ally_wings, "wings_ctrl", {"attribute": "control_immunity", "bonus": 8, "rounds": 4})
         buffs_applied.append((ally_wings.name, "+8 SPD & +8 Control Immunity (Wings)"))
         ally_wings.wings_effect = True
         ally_wings.extra_ctrl_removals = min(getattr(ally_wings, "extra_ctrl_removals", 0) + 1, 2)
@@ -180,25 +183,3 @@ class LBRM(Hero):
                 ally.apply_buff("lbrm_shield", {"attribute": "shield", "shield": int(self.atk * 15), "rounds": 1})
         return logs
 
-    def after_attack(self, source, target, skill_type, team):
-        logs = []
-        if skill_type not in ["basic", "active"]:
-            return logs
-        for ally in team.heroes:
-            if ally == source:
-                continue
-            if getattr(ally, "extra_ctrl_removals", 0) > 0:
-                for teammate in team.heroes:
-                    if teammate == ally or not teammate.is_alive():
-                        continue
-                    effects = [e for e in ["silence", "fear", "seal_of_light"] if getattr(teammate, f"has_{e}", False)]
-                    if effects:
-                        chosen = random.choice(effects)
-                        logs.append(clear_control_effect(teammate, chosen))
-                        logs.append(f"🪽 {ally.name} removes {chosen.replace('_', ' ').title()} from {teammate.name} (Wings).")
-                        if not getattr(ally, "wings_from_transition", False):
-                            teammate.energy += 30
-                            logs.append(f"⚡ {teammate.name}: +30 Energy from Wings.")
-                        ally.extra_ctrl_removals -= 1
-                        break
-        return logs

@@ -251,8 +251,9 @@ class Specter:
             logs.append(f"✨ {target_hero.name} gains +10 Energy from **Specter** (hit while HP > 50%). Total: {target_hero.energy}")
         else:
             shield_val = int(target_hero.max_hp * 0.08)
-            target_hero.shield += shield_val
-            logs.append(f"🛡️ {target_hero.name} gains a shield of {shield_val} from **Specter** (hit while HP ≤ 50%).")
+            actual = target_hero.add_shield(shield_val)
+            logs.append(f"🛡️ {target_hero.name} gains {actual // 1_000_000}M shield from **Specter** (capped, hit while HP ≤ 50%).")
+
         return logs
 
     def apply_effect(self, effect, hero, team):

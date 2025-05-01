@@ -194,21 +194,53 @@ class SQH(Hero):
             logs.append("💖 Passive healing: " + "; ".join(ally_heals))
         return logs
 
-    def take_damage(self, damage, source=None, team=None):
+    def take_damage(self, damage, source_hero=None, team=None):
+        logs = []
+
+        # Armor mitigation
+        armor_reduction = min(self.armor / (100 * 20 + 180), 0.75)
+        damage *= (1 - armor_reduction)
+
+        # DR
+        dr_reduction = min(self.DR / 100, 0.75)
+        damage *= (1 - dr_reduction)
+
+        # ADR
+        adr_reduction = min(self.ADR / 100, 0.75)
+        damage *= (1 - adr_reduction)
+
+        damage = int(damage)
+
+        # Shield absorption
+        if self.shield > 0:
+            absorbed = min(self.shield, damage)
+            self.shield -= absorbed
+            damage -= absorbed
+            logs.append(f"🛡️ {self.name} absorbs {absorbed // 1_000_000}M with shield.")
+
+        # Unbending Will check
+        if hasattr(self, "trait_enable") and hasattr(self.trait_enable, "prevent_death"):
+            if self.trait_enable.prevent_death(self, damage):
+                damage = self.hp - 1
+
+        # Final HP reduction
         self.hp -= damage
         self.hp = max(self.hp, 0)
-        logs = [f"⚔️ {self.name} takes {self.format_damage_log(damage)} (HP: {self.hp}/{self.max_hp})."]
-        if source and source.is_alive():
+        logs.append(f"⚔️ {self.name} takes {self.format_damage_log(damage)} (HP: {self.hp}/{self.max_hp}).")
+
+        # 👑 Queen's Guard Counterattack
+        if source_hero and source_hero.is_alive():
             counters = []
             for ally in team.heroes if team else []:
                 if ally != self and ally.is_alive() and getattr(ally, "queens_guard", False):
                     counter_dmg = int(ally.atk * 12)
-                    source.hp -= counter_dmg
-                    source.hp = max(source.hp, 0)
+                    source_hero.hp -= counter_dmg
+                    source_hero.hp = max(source_hero.hp, 0)
                     counters.append(f"{ally.name} hits back for {self.format_damage_log(counter_dmg)}")
-                    logs.extend(BuffHandler.apply_debuff(source, "atk_down_counter", {
+                    logs.extend(BuffHandler.apply_debuff(source_hero, "atk_down_counter", {
                         "attribute": "atk", "bonus": -0.03, "rounds": 2
                     }))
             if counters:
                 logs.append("👑 Queen's Guard counterattacks: " + "; ".join(counters))
+
         return logs

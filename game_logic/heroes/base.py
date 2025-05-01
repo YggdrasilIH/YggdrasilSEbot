@@ -269,6 +269,16 @@ class Hero:
 
     def apply_attribute_buff_with_curse(self, attribute, buff_value, boss):
         messages = []
+        alias_map = {
+        "control_immunity": "ctrl_immunity",
+        "crit_damage": "crit_dmg",
+        "crit_rate": "crit_rate",
+        "dr": "DR",
+        "adr": "ADR",
+        # Add others as needed
+        }
+        stat_attr = alias_map.get(attribute, attribute)
+
         if BuffHandler.is_attribute_buff({"attribute": attribute, "bonus": buff_value}) and self.curse_of_decay > 0:
             damage = int(boss.atk * 30)
             self.hp -= damage
@@ -276,10 +286,15 @@ class Hero:
             self.curse_of_decay -= 1
             messages.append(f"❌ Curse of Decay offsets {attribute} buff on {self.name}! Takes {damage} damage. (1 layer removed)")
         else:
-            current = getattr(self, attribute)
+            current = getattr(self, stat_attr)
             setattr(self, attribute, current + buff_value)
             messages.append(f"✅ {self.name} gains +{buff_value} {attribute}. (No Curse interference)")
         return messages
+
+    def add_shield(self, amount):
+        before = self.shield
+        self.shield = min(self.shield + amount, self.max_hp)
+        return self.shield - before  # actual amount added
 
     def get_status_description(self):
         from collections import defaultdict
@@ -387,3 +402,40 @@ class Hero:
                        ctrl_immunity=100, hd=0, precision=100, artifact=artifact, lifestar=lifestar)
         hero.energy = 50
         return hero
+
+    def take_damage(self, damage, source_hero=None, team=None):
+        logs = []
+
+        # Armor mitigation
+        armor_reduction = min(self.armor / (100 * 20 + 180), 0.75)
+        damage *= (1 - armor_reduction)
+
+        # DR mitigation
+        dr_reduction = min(self.DR / 100, 0.75)
+        damage *= (1 - dr_reduction)
+
+        # ADR mitigation
+        adr_reduction = min(self.ADR / 100, 0.75)
+        damage *= (1 - adr_reduction)
+
+        # Round down to int after all reductions
+        damage = int(damage)
+
+        # Shield absorption
+        if self.shield > 0:
+            absorbed = min(self.shield, damage)
+            self.shield -= absorbed
+            damage -= absorbed
+            logs.append(f"🛡️ {self.name} absorbs {absorbed // 1_000_000}M with shield.")
+
+        # Unbending Will check
+        if hasattr(self, "trait_enable") and hasattr(self.trait_enable, "prevent_death"):
+            if self.trait_enable.prevent_death(self, damage):
+                damage = self.hp - 1
+
+        # Final HP application
+        self.hp -= damage
+        self.hp = max(self.hp, 0)
+
+        logs.append(f"🔻 {self.name} takes {damage // 1_000_000}M damage.")
+        return logs

@@ -1,4 +1,5 @@
 from game_logic.cores import active_core
+import random
 
 def apply_control_effect(hero, effects, *args, boss=None, team=None):
     if args:
@@ -16,14 +17,19 @@ def apply_control_effect(hero, effects, *args, boss=None, team=None):
     boss_bonuses = []
 
     for effect_name in effects:
-        if active_core:
-            duration = active_core.modify_control_duration(2)
-        else:
-            duration = 2
+        duration = active_core.modify_control_duration(2) if active_core else 2
 
+        # Static immunity to one effect (full immunity)
         if hero.immune_control_effect == effect_name:
-            continue  # Skip logging Seal of Light immunity
+            continue
 
+        # 🔁 Probability-based resistance check
+        resist_chance = min(hero.ctrl_immunity, 100)
+        if random.random() < (resist_chance / 100):
+            logs.append(f"🛡️ {hero.name} resists {effect_name.replace('_', ' ').title()} ({resist_chance}% Control Immunity).")
+            continue
+
+        # ✅ Apply control effect
         setattr(hero, f"has_{effect_name}", True)
         setattr(hero, f"{effect_name}_rounds", duration)
         control_afflicted.append(effect_name)
@@ -45,6 +51,7 @@ def apply_control_effect(hero, effects, *args, boss=None, team=None):
         logs.append(f"✨ Boss gains {bonus_list}.")
 
     return logs
+
 
 
 def clear_control_effect(hero, effect_name: str):
