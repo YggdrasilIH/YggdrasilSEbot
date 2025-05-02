@@ -35,13 +35,21 @@ class DGN(Hero):
             logs.append(f"{self.name} is silenced and cannot use active skill.")
             return logs
 
-        base = self.atk * (14+self.skill_damage/100)
-        logs.extend(hero_deal_damage(self, boss, base, is_active=True, team=team, allow_counter=True, allow_crit=True))
+        # ✅ First hit triggers counterattack
+        base = self.atk * (14 + self.skill_damage / 100)
+        logs.extend(hero_deal_damage(
+            self, boss, base,
+            is_active=True, team=team, allow_counter=True, allow_crit=True
+        ))
 
+        # ✅ Bonus hit → no counter
         count = sum(1 for b in boss.buffs.values() if BuffHandler.is_attribute_reduction(b, strict=True))
-        bonus = self.atk * (10+self.skill_damage/100) * count
+        bonus = self.atk * (10 + self.skill_damage / 100) * count
         if bonus:
-            logs.extend(hero_deal_damage(self, boss, bonus, is_active=True, team=team, allow_counter=False, allow_crit=True))
+            logs.extend(hero_deal_damage(
+                self, boss, bonus,
+                is_active=True, team=team, allow_counter=False, allow_crit=True
+            ))
 
         total = base + bonus
         aoe = int(total * 0.7)
@@ -67,7 +75,6 @@ class DGN(Hero):
         self.transition_power += 6
         logs.append(f"{self.name} gains 6 TP from active skill (TP now: {self.transition_power}).")
 
-        # Replicate debuffs from self to boss
         debuffs = [
             (n, b) for n, b in self.buffs.items()
             if BuffHandler.is_attribute_reduction(b, strict=True)
@@ -86,64 +93,78 @@ class DGN(Hero):
         return logs
 
 
+
     def basic_attack(self, boss, team):
         logs = []
         if self.has_fear:
             logs.append(f"{self.name} is feared and cannot perform basic attack.")
             return logs
 
-        logs.extend(hero_deal_damage(self, boss, self.atk * (12+self.skill_damage/100), is_active=False, team=team, allow_counter=True, allow_crit=True))
+        def do_attack():
+            attack_logs = []
 
-        count = sum(1 for b in boss.buffs.values() if BuffHandler.is_attribute_reduction(b, strict=True))
-        bonus = self.atk * (10+self.skill_damage/100) * count
-        if bonus:
-            logs.extend(hero_deal_damage(self, boss, bonus, is_active=False, team=team, allow_counter=False, allow_crit=True))
+            # ✅ Trigger one counterattack here
+            attack_logs.extend(hero_deal_damage(
+                self, boss, self.atk * (12 + self.skill_damage / 100),
+                is_active=False, team=team, allow_counter=True, allow_crit=True
+            ))
 
-        total = self.atk * (12+self.skill_damage/100) + bonus
-        shield = int(total * 0.5)
-        buffs_applied = []
+            # ✅ Bonus hit → no counter
+            count = sum(1 for b in boss.buffs.values() if BuffHandler.is_attribute_reduction(b, strict=True))
+            bonus = self.atk * (10 + self.skill_damage / 100) * count
+            if bonus:
+                attack_logs.extend(hero_deal_damage(
+                    self, boss, bonus,
+                    is_active=False, team=team, allow_counter=False, allow_crit=True
+                ))
 
-        for h in team.heroes:
-            if getattr(h, "bright_blessing", False) and h.is_alive():
-                actual = h.add_shield(shield)
-                buffs_applied.append((h.name, f"+{self.format_damage_log(actual)} Shield (capped)"))
+            total = self.atk * (12 + self.skill_damage / 100) + bonus
+            shield = int(total * 0.5)
+            buffs_applied = []
 
+            for h in team.heroes:
+                if getattr(h, "bright_blessing", False) and h.is_alive():
+                    actual = h.add_shield(shield)
+                    buffs_applied.append((h.name, f"+{self.format_damage_log(actual)} Shield (capped)"))
 
-        buffs = [
-            (n, b) for n, b in self.buffs.items()
-            if BuffHandler.is_attribute_buff(b, strict=True)
-            and not n.startswith("gg_")
-            and "_self" not in n
-        ]
+            buffs = [
+                (n, b) for n, b in self.buffs.items()
+                if BuffHandler.is_attribute_buff(b, strict=True)
+                and not n.startswith("gg_")
+                and "_self" not in n
+            ]
 
-        if buffs:
-            replicate = random.sample(buffs, min(2, len(buffs)))
-            for ally in team.heroes:
-                if getattr(ally, "bright_blessing", False) and ally.is_alive():
-                    for name, buff in replicate:
-                        ally.apply_buff(f"replicated_{name}", buff.copy())
-                        buffs_applied.append((ally.name, f"Replicated {name}"))
-        else:
-            logs.append(f"⚠️ {self.name} had no valid attribute buffs to replicate.")
+            if buffs:
+                replicate = random.sample(buffs, min(2, len(buffs)))
+                for ally in team.heroes:
+                    if getattr(ally, "bright_blessing", False) and ally.is_alive():
+                        for name, buff in replicate:
+                            ally.apply_buff(f"replicated_{name}", buff.copy())
+                            buffs_applied.append((ally.name, f"Replicated {name}"))
+            else:
+                attack_logs.append(f"⚠️ {self.name} had no valid attribute buffs to replicate.")
 
-        if buffs_applied:
-            logs.append("✨ Basic Attack Buffs Applied:")
-            logs.extend(group_team_buffs(buffs_applied))
+            if buffs_applied:
+                attack_logs.append("✨ Basic Attack Buffs Applied:")
+                attack_logs.extend(group_team_buffs(buffs_applied))
 
-        boss.apply_buff("armor_down", {"attribute": "armor", "bonus": -0.18, "rounds": 2})
-        boss.apply_buff("block_down", {"attribute": "block", "bonus": -0.18, "rounds": 2})
-        logs.append(f"{self.name} reduces {boss.name}'s Armor and Block by 18% for 2 rounds.")
+            boss.apply_buff("armor_down", {"attribute": "armor", "bonus": -0.18, "rounds": 2})
+            boss.apply_buff("block_down", {"attribute": "block", "bonus": -0.18, "rounds": 2})
+            attack_logs.append(f"{self.name} reduces {boss.name}'s Armor and Block by 18% for 2 rounds.")
 
-        for h in team.heroes:
-            if getattr(h, "bright_blessing", False) and h.is_alive():
-                if random.random() < 0.5:
-                    reducible = [(n, b) for n, b in h.buffs.items() if BuffHandler.is_attribute_reduction(b, strict=True)]
-                    if reducible:
-                        to_remove = random.choice(reducible)
-                        del h.buffs[to_remove[0]]
-                        logs.append(f"{self.name} removes attribute reduction '{to_remove[0]}' from {h.name}.")
+            for h in team.heroes:
+                if getattr(h, "bright_blessing", False) and h.is_alive():
+                    if random.random() < 0.5:
+                        reducible = [(n, b) for n, b in h.buffs.items() if BuffHandler.is_attribute_reduction(b, strict=True)]
+                        if reducible:
+                            to_remove = random.choice(reducible)
+                            del h.buffs[to_remove[0]]
+                            attack_logs.append(f"{self.name} removes attribute reduction '{to_remove[0]}' from {h.name}.")
 
-        return logs
+            return attack_logs
+
+        return self.with_basic_flag(do_attack)
+
 
 
     def end_of_round(self, boss, team, round_num=None):

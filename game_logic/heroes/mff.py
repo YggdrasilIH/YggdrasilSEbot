@@ -27,27 +27,30 @@ class MFF(Hero):
             logs.append(f"{self.name} is silenced and cannot use active skill.")
             return logs
 
-        logs.extend(hero_deal_damage(self, boss, self.atk * (16+self.skill_damage), is_active=True, team=team))
+        # ✅ Counterattack allowed here
+        logs.extend(hero_deal_damage(
+            self, boss, self.atk * (16 + self.skill_damage),
+            is_active=True, team=team, allow_counter=True
+        ))
 
-        poison_damage = int(self.atk * (12+self.skill_damage/100))
+        # Poison application (no counter)
+        poison_damage = int(self.atk * (12 + self.skill_damage / 100))
         logs.append(f"☠️ Applies Poison: {poison_damage} for 3 rounds.")
         logs.extend(BuffHandler.apply_debuff(boss, "poison", {
             "attribute": "poison", "damage": poison_damage, "rounds": 3
         }))
 
-        # Find all ATK and HD buffs
+        # Remove ALL ATK and HD buffs from boss
         atk_buffs = [name for name, data in boss.buffs.items()
                     if isinstance(data, dict) and data.get("attribute") == "atk"]
         hd_buffs = [name for name, data in boss.buffs.items()
                     if isinstance(data, dict) and data.get("attribute") == "HD"]
 
-        # Remove ALL ATK buffs
         for buff_name in atk_buffs:
             buff = boss.buffs.pop(buff_name, None)
             if buff:
                 boss.atk -= buff.get("bonus", 0)
 
-        # Remove ALL HD buffs
         for buff_name in hd_buffs:
             buff = boss.buffs.pop(buff_name, None)
             if buff:
@@ -56,10 +59,10 @@ class MFF(Hero):
         removed_buffs = atk_buffs + hd_buffs
         if removed_buffs:
             logs.append(f"🧹 {self.name} removes boss buffs: {', '.join(removed_buffs)}.")
-            
+
         boss.recalculate_stats()
 
-        # Gain EF stack
+        # EF logic
         self.evolutionary_factor = min(self.evolutionary_factor + 1, 3)
         logs.append(f"🔬 Gains 1 Evolutionary Factor (now {self.evolutionary_factor}).")
 
@@ -69,22 +72,36 @@ class MFF(Hero):
 
 
     def basic_attack(self, boss, team):
-        logs = []
         if self.has_fear:
-            logs.append(f"{self.name} is feared and cannot use basic attack.")
+            return [f"{self.name} is feared and cannot use basic attack."]
+
+        def do_attack():
+            logs = []
+
+            # ✅ Main hit — counterattack should occur
+            logs.extend(hero_deal_damage(
+                self, boss, self.atk * (10 + self.skill_damage / 100),
+                is_active=False, team=team, allow_counter=True
+            ))
+
+            # ❌ Poison application — no counter
+            poison_damage = int(self.atk * 5.6)
+            logs.append(f"☠️ Applies Poison: {poison_damage} for 2 rounds.")
+            logs.extend(BuffHandler.apply_debuff(boss, "poison", {
+                "attribute": "poison", "damage": poison_damage, "rounds": 2
+            }))
+
+            # ❌ Regen application — no counter
+            regen_amt = int(self.max_hp * 0.15)
+            self.add_or_update_buff(self, "mff_regen", {
+                "attribute": "regen", "heal_amount": regen_amt, "rounds": 2
+            })
+            logs.append(f"🧬 Gains Regen: {regen_amt} HP over 2 rounds.")
+
             return logs
 
-        logs.extend(hero_deal_damage(self, boss, self.atk * (10+self.skill_damage/100), is_active=False, team=team))
-        poison_damage = int(self.atk * 5.6)
-        logs.append(f"☠️ Applies Poison: {poison_damage} for 2 rounds.")
-        logs.extend(BuffHandler.apply_debuff(boss, "poison", {
-            "attribute": "poison", "damage": poison_damage, "rounds": 2
-        }))
+        return self.with_basic_flag(do_attack)
 
-        regen_amt = int(self.max_hp * 0.15)
-        self.add_or_update_buff(self, "mff_regen", {"attribute": "regen", "heal_amount": regen_amt, "rounds": 2})
-        logs.append(f"🧬 Gains Regen: {regen_amt} HP over 2 rounds.")
-        return logs
 
     def passive_on_ally_attack(self, ally, boss):
         if self.has_seal_of_light:

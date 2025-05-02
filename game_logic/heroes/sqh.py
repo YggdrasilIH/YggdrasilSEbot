@@ -43,10 +43,11 @@ class SQH(Hero):
             logs.append(f"{self.name} is silenced and cannot use active skill.")
             return logs
 
-        dmg = self.atk * (18+self.skill_damage/100)
+        dmg = self.atk * (18 + self.skill_damage / 100)
         logs.extend(hero_deal_damage(self, boss, dmg, is_active=True, team=team, allow_counter=True, allow_crit=True))
 
         effects = []
+
         boss.bleed = self.atk * 18
         boss.bleed_duration = 2
         effects.append("Bleed")
@@ -59,26 +60,17 @@ class SQH(Hero):
             effects.append("Abyssal Corruption +1")
 
         stacks = boss.abyssal_corruption
-
-        # Apply or refresh Crit Damage Taken / Dealt effects
         BuffHandler.apply_debuff(boss, "crit_dmg_in", {
-            "attribute": "crit_damage_taken",
-            "bonus": 24 * stacks,
-            "rounds": 9999
+            "attribute": "crit_damage_taken", "bonus": 24 * stacks, "rounds": 9999
         })
         BuffHandler.apply_debuff(boss, "crit_dmg_out", {
-            "attribute": "crit_damage",
-            "bonus": -24 * stacks,
-            "rounds": 9999
+            "attribute": "crit_damage", "bonus": -24 * stacks, "rounds": 9999
         })
         effects.append(f"-24% Crit DMG Dealt, +24% Crit DMG Taken × {stacks}")
 
-        # Apply -10% crit rate once if not already present
         if "crit_down_ac" not in boss.buffs:
             logs.extend(BuffHandler.apply_debuff(boss, "crit_down_ac", {
-                "attribute": "crit_rate",
-                "bonus": -0.10,
-                "rounds": 2
+                "attribute": "crit_rate", "bonus": -0.10, "rounds": 2
             }))
             effects.append("-10% Crit Rate")
 
@@ -92,28 +84,39 @@ class SQH(Hero):
 
         return logs
 
+
     def basic_attack(self, boss, team):
-        logs = []
         if self.has_fear:
-            logs.append(f"{self.name} is feared and cannot use basic attack.")
+            return [f"{self.name} is feared and cannot use basic attack."]
+
+        def do_attack():
+            logs = []
+
+            # ✅ Main hit — should allow counter
+            dmg = self.atk * (12 + self.skill_damage / 100)
+            logs.extend(hero_deal_damage(
+                self, boss, dmg,
+                is_active=False, team=team,
+                allow_counter=True, allow_crit=True
+            ))
+
+            buff_logs = []
+
+            # ❌ Attribute debuff — no counter
+            logs.extend(BuffHandler.apply_debuff(boss, "crit_down_basic", {
+                "attribute": "crit_rate", "bonus": -0.25, "rounds": 2
+            }))
+            buff_logs.append("-25% Crit Rate")
+
+            # ❌ Self buffs — no counter
+            buff_logs.extend(self.apply_attribute_buff_with_curse("crit_rate", 18, boss))
+            buff_logs.extend(self.apply_attribute_buff_with_curse("crit_dmg", 18, boss))
+
+            logs.append(f"🔪 {self.name} Basic Attack effects: {' | '.join(buff_logs)}.")
             return logs
 
-        dmg = self.atk * (12+self.skill_damage/100)
-        logs.extend(hero_deal_damage(self, boss, dmg, is_active=False, team=team, allow_counter=True, allow_crit=True))
+        return self.with_basic_flag(do_attack)
 
-        buff_logs = []
-        logs.extend(BuffHandler.apply_debuff(boss, "crit_down_basic", {
-            "attribute": "crit_rate",
-            "bonus": -0.25,
-            "rounds": 2
-        }))
-        buff_logs.append("-25% Crit Rate")
-
-        buff_logs.extend(self.apply_attribute_buff_with_curse("crit_rate", 18, boss))
-        buff_logs.extend(self.apply_attribute_buff_with_curse("crit_dmg", 18, boss))
-
-        logs.append(f"🔪 {self.name} Basic Attack effects: {' | '.join(buff_logs)}.")
-        return logs
 
     def release_transition_skill(self, team, boss):
             if self.has_seal_of_light:

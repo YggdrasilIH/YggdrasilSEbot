@@ -2,6 +2,13 @@ from game_logic.buff_handler import BuffHandler
 from utils.log_utils import stylize_log
 import random
 from math import floor
+from game_logic.boss import Boss
+
+def apply_flat_reduction(hero, damage):
+    if hero.name == "LFA":
+        return int(damage * 0.90)
+    else:
+        return int(damage * 0.70)
 
 def apply_burn(target, damage, rounds, source=None, label="Burn"):
     logs = []
@@ -18,27 +25,36 @@ def apply_burn(target, damage, rounds, source=None, label="Burn"):
         logs.append(f"⚠️ Burn failed: {target.name} has no poison_effects list.")
     return logs
 
+
 def hero_deal_damage(source, target, base_damage, is_active, team, allow_counter=True, allow_crit=True):
     logs = []
     if not target.is_alive():
         return logs
 
+    # 🧠 Only tag real attacks (basic/active) vs Boss
+    manually_flagged = hasattr(source, "_using_real_attack") and source._using_real_attack
+    temp_flagged = False
+
+    is_basic = getattr(source, "_current_action_type", None) == "basic"
+    is_basic_or_active = is_active or is_basic
+
+    if isinstance(target, Boss) and allow_counter and is_basic_or_active and not manually_flagged:
+        source._using_real_attack = True
+        temp_flagged = True
+
     crit = False if not allow_crit else random.random() < (source.crit_rate / 100)
     crit_dmg = min(source.crit_dmg, 150)
     precision = min(source.precision, 150)
 
-    # Phase 1: Base scaling
     damage = base_damage
     if crit:
-        damage *= 1.5 + (crit_dmg / 100)*2
+        damage *= 1.5 + (crit_dmg / 100) * 2
     damage *= (1 + source.hd * 0.007)
     damage *= (1 + precision * 0.003)
     damage *= (1 + source.all_damage_dealt / 100)
-
-    # Save phase 1 result
     phase1 = damage
 
-    # Phase 2: Multiplicative bonuses
+    # Phase 2 bonuses
     poison_bonus = 0
     if any(isinstance(b, dict) and b.get("attribute") == "poison" for b in getattr(target, "buffs", {}).values()):
         poison_bonus = getattr(source, "bonus_damage_vs_poisoned", 0)
@@ -63,7 +79,6 @@ def hero_deal_damage(source, target, base_damage, is_active, team, allow_counter
         hp_bonus = 0.12
         logs.append(f"🟥 {source.name} gains +12% bonus vs higher-HP target.")
 
-    # Maim: +30% damage at 0 HP, scaling linearly with HP lost
     maim_bonus = 0
     if target.max_hp > 0:
         hp_percent = target.hp / target.max_hp
@@ -71,17 +86,14 @@ def hero_deal_damage(source, target, base_damage, is_active, team, allow_counter
         if maim_bonus > 0:
             logs.append(f"🪓 {source.name} gains +{int(maim_bonus * 100)}% Maim bonus (target at {int(hp_percent * 100)}% HP).")
 
-    # Final Phase 2 multiplier
-    phase2_multiplier = (1 + poison_bonus) * (1 + burn_bonus) * (1 + gk) * (1 + defier)* (1 + hp_bonus) * (1 + maim_bonus)
+    phase2_multiplier = (1 + poison_bonus) * (1 + burn_bonus) * (1 + gk) * (1 + defier) * (1 + hp_bonus) * (1 + maim_bonus)
     damage = int(phase1 * phase2_multiplier)
 
-    # 🆕 DT outgoing bonus
     if hasattr(source, "dt_level") and source.dt_level > 0:
-        dt_bonus = 1 + (source.dt_level * 0.10)  # 10% bonus per level
+        dt_bonus = 1 + (source.dt_level * 0.10)
         damage = int(damage * dt_bonus)
         logs.append(f"🔮 {source.name} gains +{int((dt_bonus - 1) * 100)}% damage from DT level {source.dt_level}.")
 
-    # 🆕 Now apply Balanced Strike **after phase2 multipliers**
     if hasattr(source, "trait_enable") and hasattr(source.trait_enable, "apply_crit_bonus"):
         heal_amt, extra_dmg = source.trait_enable.apply_crit_bonus(damage, crit)
         if heal_amt > 0:
@@ -91,7 +103,6 @@ def hero_deal_damage(source, target, base_damage, is_active, team, allow_counter
             damage += extra_dmg
             logs.append(f"🟢 {source.name} gains +{extra_dmg // 1_000_000}M bonus damage from Balanced Strike.")
 
-    # Apply Abyssal Corruption bonus silently
     if crit:
         bonus = 0
         for buff in getattr(target, "buffs", {}).values():
@@ -100,21 +111,17 @@ def hero_deal_damage(source, target, base_damage, is_active, team, allow_counter
         if bonus:
             damage = int(damage * (1 + bonus / 100))
 
-    # DR / ADR reduction silently
     dr = min(getattr(target, "dr", 0), 0.75)
     adr = min(getattr(target, "adr", 0), 0.75)
     damage *= (1 - dr)
     damage *= (1 - adr)
 
-    # ✅ Shield absorption with logging
     if target.shield > 0:
         absorbed = min(target.shield, damage)
         target.shield -= absorbed
         damage -= absorbed
         logs.append(f"🛡️ {target.name} absorbs {absorbed // 1_000_000}M damage with Shield.")
 
-
-    # Unbending Will
     if hasattr(target, "trait_enable") and hasattr(target.trait_enable, "prevent_death"):
         if target.trait_enable.prevent_death(target, damage):
             logs.append(stylize_log("control", f"{target.name} survives fatal damage due to Unbending Will!"))
@@ -124,7 +131,6 @@ def hero_deal_damage(source, target, base_damage, is_active, team, allow_counter
     if hasattr(source, "total_damage_dealt"):
         source.total_damage_dealt += damage
 
-    # Final damage application
     if hasattr(target, "take_damage"):
         logs += target.take_damage(damage, source, team) or []
     else:
@@ -133,23 +139,24 @@ def hero_deal_damage(source, target, base_damage, is_active, team, allow_counter
     if damage > 0:
         logs.append(f"🟢 {source.name} deals {damage // 1_000_000}M damage to {target.name} ({'CRIT' if crit else 'Normal'} hit).")
 
-    # After-attack effects
     if hasattr(source, "after_attack"):
         logs += source.after_attack(source, target, "active" if is_active else "basic", team) or []
 
-    # Lifestar triggers
     for ally in team.heroes:
         if ally != target and ally.is_alive() and hasattr(ally, "lifestar") and hasattr(ally.lifestar, "on_ally_hit"):
             if hasattr(target, "has_seal_of_light"):
                 logs += ally.lifestar.on_ally_hit(target, team, "active" if is_active else "basic") or []
 
-    # On-receive-damage hooks
     if hasattr(target, "on_receive_damage"):
         logs += target.on_receive_damage(damage, team, source) or []
 
-    # Counterattack
     if allow_counter and hasattr(target, "counterattack"):
         logs += target.counterattack(team.heroes)
 
+    # 🧼 Reset temporary flag if we injected it
+    if temp_flagged:
+        source._using_real_attack = False
+
     return logs
+
 

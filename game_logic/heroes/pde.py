@@ -31,10 +31,18 @@ class PDE(Hero):
         if self.has_silence:
             logs.append(f"{self.name} is silenced and cannot use active skill.")
             return logs
-        logs.extend(hero_deal_damage(self, boss, self.atk * (20+self.skill_damage/100), is_active=True, team=team))
+
+        # ✅ Damage should trigger counterattack
+        logs.extend(hero_deal_damage(
+            self, boss, self.atk * (20 + self.skill_damage / 100),
+            is_active=True, team=team, allow_counter=True
+        ))
+
+        # ❌ Energy drain (no counter)
         logs.append(f"{self.name} reduces {boss.name}'s energy by 50.")
         boss.energy = max(boss.energy - 50, 0)
 
+        # ❌ Buff application (no counter)
         grant_logs = []
         for ally in team.back_line:
             self.add_or_update_buff(ally, "mystical_veil", {"layers": 2, "rounds": 9999})
@@ -42,20 +50,33 @@ class PDE(Hero):
             grant_logs.append(f"{ally.name}: Mystical Veil + Regen")
         if grant_logs:
             logs.append(f"✨ PDE grants: {', '.join(grant_logs)}")
+
         return logs
+
 
     def basic_attack(self, boss, team):
-        logs = []
         if self.has_fear:
-            logs.append(f"{self.name} is feared and fails basic attack.")
-            return logs
-        logs.extend(hero_deal_damage(self, boss, self.atk * (20+self.skill_damage/100), is_active=False, team=team))
-        target = min([h for h in team.heroes if h.is_alive()], key=lambda h: h.hp, default=self)
+            return [f"{self.name} is feared and fails basic attack."]
 
-        self.add_or_update_buff(target, "mystical_veil", {"layers": 1, "rounds": 9999})
-        self.add_or_update_buff(target, "regen", {"heal_amount": int(self.atk * 12), "rounds": 2})
-        logs.append(f"✨ PDE grants to {target.name}: Mystical Veil + Regen")
-        return logs
+        def do_attack():
+            logs = []
+
+            # ✅ Main hit triggers counterattack
+            logs.extend(hero_deal_damage(
+                self, boss, self.atk * (20 + self.skill_damage / 100),
+                is_active=False, team=team, allow_counter=True
+            ))
+
+            # ❌ Buffs should not trigger counterattack
+            target = min([h for h in team.heroes if h.is_alive()], key=lambda h: h.hp, default=self)
+            self.add_or_update_buff(target, "mystical_veil", {"layers": 1, "rounds": 9999})
+            self.add_or_update_buff(target, "regen", {"heal_amount": int(self.atk * 12), "rounds": 2})
+            logs.append(f"✨ PDE grants to {target.name}: Mystical Veil + Regen")
+
+            return logs
+
+        return self.with_basic_flag(do_attack)
+
 
     def passive_trigger(self, allies, boss, team):
         if self.has_seal_of_light:

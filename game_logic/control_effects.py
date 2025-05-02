@@ -14,19 +14,19 @@ def apply_control_effect(hero, effects, *args, boss=None, team=None):
         effects = [effects]
 
     control_afflicted = []
-    boss_bonuses = []
 
     for effect_name in effects:
         duration = active_core.modify_control_duration(2) if active_core else 2
 
-        # Static immunity to one effect (full immunity)
+        # Static immunity to one effect
         if hero.immune_control_effect == effect_name:
             continue
 
-        # 🔁 Probability-based resistance check
-        resist_chance = min(hero.ctrl_immunity, 100)
-        if random.random() < (resist_chance / 100):
-            logs.append(f"🛡️ {hero.name} resists {effect_name.replace('_', ' ').title()} ({resist_chance}% Control Immunity).")
+        # ✅ Clamp control immunity between 0 and 100
+        raw_ctrl = getattr(hero, "ctrl_immunity", 0)
+        effective_ctrl = min(max(raw_ctrl, 0), 100)
+        if random.random() < (effective_ctrl / 100):
+            logs.append(f"🛡️ {hero.name} resists {effect_name.replace('_', ' ').title()} ({effective_ctrl}% Control Immunity).")
             continue
 
         # ✅ Apply control effect
@@ -34,23 +34,16 @@ def apply_control_effect(hero, effects, *args, boss=None, team=None):
         setattr(hero, f"{effect_name}_rounds", duration)
         control_afflicted.append(effect_name)
 
-        if boss and team:
-            if effect_name == "fear":
-                boss.hd += 50
-                boss_bonuses.append("+50 HD")
-            elif effect_name == "silence":
-                boss.energy += 50
-                boss_bonuses.append("+50 Energy")
-
     if control_afflicted:
         control_list = " and ".join([effect.replace("_", " ").capitalize() for effect in control_afflicted])
         logs.append(f"🔋 {hero.name} is controlled by {control_list} for {duration} rounds.")
 
-    if boss_bonuses:
-        bonus_list = " and ".join(boss_bonuses)
-        logs.append(f"✨ Boss gains {bonus_list}.")
+        if boss:
+            for effect in control_afflicted:
+                boss.on_hero_controlled(hero, effect)
 
-    return logs
+    return logs, control_afflicted
+
 
 
 
@@ -60,21 +53,3 @@ def clear_control_effect(hero, effect_name: str):
     return f"🧹 {hero.name} has {effect_name.replace('_', ' ').capitalize()} removed."
 
 
-def add_calamity(hero, amount, logs, boss=None):
-    previous = hero.calamity
-    hero.calamity += amount
-    if previous < 5 and hero.calamity >= 5:
-        original_immunity = getattr(hero, 'original_ctrl_immunity', 100)
-        hero.ctrl_immunity = max(hero.ctrl_immunity, max(0, original_immunity - 100))
-
-        effects_to_apply = []
-        for effect in ["silence", "fear", "seal_of_light"]:
-            if hero.immune_control_effect == effect:
-                logs.append(f"🛡️ {hero.name} is immune to {effect.replace('_', ' ').title()}.")
-            else:
-                effects_to_apply.append(effect)
-
-        if effects_to_apply:
-            logs.extend(apply_control_effect(hero, effects_to_apply, boss=boss, team=hero.team if hasattr(hero, 'team') else None))
-
-        hero.calamity = 0

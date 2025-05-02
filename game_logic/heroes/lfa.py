@@ -25,40 +25,55 @@ class LFA(Hero):
             logs.append(f"{self.name} is silenced and cannot use active skill.")
             return logs
 
-        base_hits = []
         crit_failed = False
+        hits = []
 
+        # Step 1: Add 2 base hits (can crit)
         for _ in range(2):
-            base_hits.append(self.atk * self.skill_multiplier(12))
-            if random.random() >= (self.crit_rate / 100):
-                crit_failed = True
+            hits.append(("base", self.atk * self.skill_multiplier(12)))
 
+        # Step 2: If boss < 60% HP, add 2 more hits (can crit)
         if boss.hp < boss.max_hp * 0.60:
             for _ in range(2):
-                base_hits.append(self.atk * self.skill_multiplier(12))
-                if random.random() >= (self.crit_rate / 100):
-                    crit_failed = True
-            second_total = sum(base_hits[2:])
+                hits.append(("base", self.atk * self.skill_multiplier(12)))
+
+            # Heal based on second set of hits
+            second_total = sum(h[1] for h in hits[2:])
             heal_amt = int(second_total * 1.20)
             self.hp = min(self.max_hp, self.hp + heal_amt)
             logs.append(f"❤️ {self.name} heals for {heal_amt // 1_000_000}M HP from extra attacks.")
 
-        base_hits.append(self.atk * self.skill_multiplier(12))
-        if random.random() >= (self.crit_rate / 100):
-            crit_failed = True
+        # Step 3: Final single hit (cannot crit)
+        hits.append(("final", self.atk * self.skill_multiplier(12)))
 
-        # Step 1: Process base hits and final single hit (no crit allowed here)
-        base_total = sum(base_hits)
-        logs.extend(hero_deal_damage(self, boss, base_total, is_active=True, team=team, allow_counter=True, allow_crit=False))
+        # Step 4: Process each hit separately
+        for i, (hit_type, dmg) in enumerate(hits):
+            allow_crit = hit_type == "base"
+            allow_counter = i == 0  # First hit only
+            result_logs = hero_deal_damage(
+                self, boss, dmg, is_active=True, team=team,
+                allow_counter=allow_counter, allow_crit=allow_crit
+            )
+            logs.extend(result_logs)
 
-        # Step 2: Process burst separately (crit allowed here)
+            # Track crit_failed if base hit missed
+            if allow_crit and all("CRIT" not in r for r in result_logs if isinstance(r, str)):
+                crit_failed = True
+
+        # Step 5: Burst (crittable, no counter)
+        base_total = sum(h[1] for h in hits)
         burst_damage = int(base_total * 1.20)
         logs.append(f"🔫 {self.name} unleashes {burst_damage // 1_000_000}M bonus burst damage.")
-        logs.extend(hero_deal_damage(self, boss, burst_damage, is_active=True, team=team, allow_counter=True, allow_crit=True))
+        logs.extend(hero_deal_damage(
+            self, boss, burst_damage, is_active=True, team=team,
+            allow_counter=False, allow_crit=True
+        ))
 
+        # Step 6: Balanced Strike override
         if hasattr(self.trait_enable, "override_crit_check"):
             self.trait_enable.override_crit_check(crit_failed)
 
+        # Step 7: Buffs and debuffs
         steal_amount = int(boss.base_atk * 0.30)
         logs.extend(BuffHandler.apply_debuff(boss, "lfa_atk_down_active", {
             "attribute": "atk", "bonus": -0.30, "rounds": 9999
@@ -70,6 +85,7 @@ class LFA(Hero):
         }, boss))
         logs.append(f"💪 {self.name} gains +{steal_amount:,} ATK permanently by stealing it from the boss.")
 
+        # Step 8: Transition power
         self.transition_power += 6
         logs.append(f"{self.name} gains 6 layers of Transition Power (TP now: {self.transition_power}).")
 
@@ -79,16 +95,27 @@ class LFA(Hero):
         return logs
 
     def basic_attack(self, boss, team):
-        logs = []
         if self.has_fear:
-            logs.append(f"{self.name} is feared and cannot perform basic attack.")
+            return [f"{self.name} is feared and cannot perform basic attack."]
+
+        def do_attack():
+            logs = []
+
+            # ✅ Main basic hit triggers counter
+            dmg = self.atk * self.skill_multiplier(9.6)
+            logs.extend(hero_deal_damage(
+                self, boss, dmg,
+                is_active=False, team=team,
+                allow_counter=True, allow_crit=True
+            ))
+
+            # ✅ Buff application (no counter)
+            logs.extend(self.apply_attribute_buff_with_curse("crit_rate", 24, boss))
+
             return logs
 
-        dmg = self.atk * self.skill_multiplier(9.6)
-        logs.extend(hero_deal_damage(self, boss, dmg, is_active=False, team=team, allow_counter=True, allow_crit=True))
-        logs.extend(self.apply_attribute_buff_with_curse("crit_rate", 24, boss))
+        return self.with_basic_flag(do_attack)
 
-        return logs
 
     def release_transition_skill(self, boss, team):
         logs = []

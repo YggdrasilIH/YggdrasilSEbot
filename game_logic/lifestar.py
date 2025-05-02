@@ -165,46 +165,64 @@ class Specter:
             logs.append(f"❌ {hero.name}'s **Specter** end-of-round effects are blocked by **Seal of Light**.")
             return logs
 
-        # Group all reductions by attribute (e.g., all -atk, all -armor)
         from collections import defaultdict
-
         attr_reduction_groups = defaultdict(list)
+
+        # 🔎 Collect all negative attribute reductions
         for name, data in hero.buffs.items():
             if isinstance(data, dict) and "attribute" in data and "bonus" in data and data["bonus"] < 0:
                 attr_reduction_groups[data["attribute"]].append((name, data))
 
-        # Convert one full stack
         logs = []
         converted_attrs = []
+
+        # ✅ Convert one full stack
         if attr_reduction_groups:
             chosen_attr = random.choice(list(attr_reduction_groups.keys()))
-            for name, debuff in attr_reduction_groups[chosen_attr]:
+            stack = attr_reduction_groups[chosen_attr]
+            for name, _ in stack:
                 hero.buffs.pop(name)
-            total_bonus = sum(abs(d["bonus"]) for _, d in attr_reduction_groups[chosen_attr])
-            duration = max(d.get("rounds", 2) for _, d in attr_reduction_groups[chosen_attr])
-            BuffHandler.apply_buff(hero, f"specter_convert_{chosen_attr}", {
+
+            total_bonus = sum(abs(d["bonus"]) for _, d in stack)
+            duration = max(d.get("rounds", 2) for _, d in stack)
+            is_percent = all(isinstance(d["bonus"], float) and abs(d["bonus"]) < 1.0 for _, d in stack)
+
+            buff_data = {
                 "attribute": chosen_attr,
                 "bonus": total_bonus,
                 "rounds": duration
-            })
+            }
+            if is_percent:
+                buff_data["is_percent"] = True  # Optional: for clarity or future use
+
+            BuffHandler.apply_buff(hero, f"specter_convert_{chosen_attr}", buff_data)
             logs.append(f"🔄 {hero.name} converts all reductions of {chosen_attr} (+{total_bonus}) for {duration} rounds.")
             converted_attrs.append(chosen_attr)
 
-        # 30% chance to convert another different attribute stack
+        # 🎲 30% chance to convert a second stack
         remaining_attrs = [attr for attr in attr_reduction_groups if attr not in converted_attrs]
         if remaining_attrs and random.random() < 0.3:
             second_attr = random.choice(remaining_attrs)
-            for name, debuff in attr_reduction_groups[second_attr]:
+            stack = attr_reduction_groups[second_attr]
+            for name, _ in stack:
                 hero.buffs.pop(name)
-            total_bonus = sum(abs(d["bonus"]) for _, d in attr_reduction_groups[second_attr])
-            duration = max(d.get("rounds", 2) for _, d in attr_reduction_groups[second_attr])
-            BuffHandler.apply_buff(hero, f"specter_convert_{second_attr}_extra", {
+
+            total_bonus = sum(abs(d["bonus"]) for _, d in stack)
+            duration = max(d.get("rounds", 2) for _, d in stack)
+            is_percent = all(isinstance(d["bonus"], float) and abs(d["bonus"]) < 1.0 for _, d in stack)
+
+            buff_data = {
                 "attribute": second_attr,
                 "bonus": total_bonus,
                 "rounds": duration
-            })
+            }
+            if is_percent:
+                buff_data["is_percent"] = True
+
+            BuffHandler.apply_buff(hero, f"specter_convert_{second_attr}_extra", buff_data)
             logs.append(f"✨ {hero.name} converts another reduction stack of {second_attr} (+{total_bonus}) for {duration} rounds (30% bonus proc).")
 
+        # 🎁 Apply early-round burst buffs
         if round_num <= 5:
             burst_logs = self.grant_burst_buffs(hero, team, round_num)
             logs.extend(burst_logs)
@@ -214,6 +232,7 @@ class Specter:
             logs.extend(group_team_buffs(buffs_applied))
 
         return logs
+
 
     def on_after_action(self, hero, team):
         if hero.has_seal_of_light:

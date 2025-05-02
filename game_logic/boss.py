@@ -1,6 +1,7 @@
 import random
 from game_logic.buff_handler import BuffHandler
-from game_logic.control_effects import add_calamity
+from game_logic.control_effects import apply_control_effect, clear_control_effect
+
 from utils.log_utils import stylize_log
 
 class Boss:
@@ -8,8 +9,8 @@ class Boss:
         self.name = "Boss"
         self.max_hp = 20_000_000_000_000_000_000
         self.hp = self.max_hp
-        self.atk = 1_000_000_000
-        self.base_atk = 1_000_000_000
+        self.atk = 500_000_000
+        self.base_atk = 500_000_000
         self.dr = 0
         self.block = 0
         self.dodge = 0
@@ -20,6 +21,7 @@ class Boss:
         self.crit_rate = 0
         self.crit_dmg = 0
         self.hd = 0
+        damage_output = 0
         self.base_hd = 0
         self.total_damage_taken = 0
         self.attribute_effects = []
@@ -28,7 +30,7 @@ class Boss:
         self.shrink_debuff = None
         self.non_skill_debuffs = []
         self.buffs = {}
-        self.all_damage_bonus = 0
+        self.all_damage_dealt = 0
         self.shield = 0
         self.curse_of_decay = 0
         self.abyssal_corruption = 0
@@ -47,32 +49,43 @@ class Boss:
     def recalculate_stats(self):
         self.atk = self.base_atk
         self.hd = 0
-        self.all_damage_bonus = 0
+        self.all_damage_dealt = 0
+        self.damage_output = 0
 
+        atk_percent = 0
         for buff in self.buffs.values():
-            if isinstance(buff, dict):
-                if buff.get("attribute") == "atk":
-                    bonus = buff.get("bonus", 0)
-                    # Handle if debuff is a percentage (e.g., -0.5 = -50%)
-                    if isinstance(bonus, float) and abs(bonus) < 1:
-                        self.atk = int(self.atk * (1 + bonus))
-                    else:
-                        self.atk += bonus
-                if buff.get("attribute") == "HD":
-                    self.hd += buff.get("bonus", 0)
-                if buff.get("attribute") == "all_damage_bonus":
-                    self.all_damage_bonus += buff.get("bonus", 0)
-        
-        self.atk = max(self.atk, 1)  # Never allow negative or zero attack
+            if not isinstance(buff, dict):
+                continue
+            attr = buff.get("attribute")
+            bonus = buff.get("bonus", 0)
 
+            if attr == "atk":
+                if isinstance(bonus, (float, int)):
+                    atk_percent += bonus  # Treat all as percentage
+            elif attr == "HD":
+                self.hd += bonus
+            elif attr == "all_damage_dealt":
+                self.all_damage_dealt += bonus
+            elif attr == "damage_output":
+                self.damage_output += bonus
+
+        self.atk = int(self.base_atk * (1 + atk_percent))
+        self.atk = max(self.atk, 1)
 
 
     def take_damage(self, dmg, source_hero=None, team=None, real_attack=False):
         logs = []
+
+        print(f"[DEBUG] Boss.take_damage → Called with dmg={dmg}")
+        if source_hero:
+            print(f"[DEBUG] Source Hero: {source_hero.name}")
+            print(f"[DEBUG] _using_real_attack: {getattr(source_hero, '_using_real_attack', False)}")
+            print(f"[DEBUG] is_alive: {source_hero.is_alive()}")
+
         multiplier = 1.0
         if self.shrink_debuff:
             multiplier *= self.shrink_debuff.get("multiplier_received", 1)
-        damage_bonus = 1 + (self.all_damage_bonus / 100)
+        damage_bonus = 1 + (self.all_damage_dealt / 100)
         effective_dmg = dmg * multiplier * damage_bonus
 
         dr = min(getattr(self, "dr", 0), 0.75)
@@ -86,9 +99,13 @@ class Boss:
         logs.append(stylize_log("damage", f"Boss takes {int(effective_dmg / 1e6):.0f}M damage."))
 
         if source_hero and source_hero.is_alive() and getattr(source_hero, '_using_real_attack', False):
+            print(f"[DEBUG] ✅ Counterattack flag set on boss.")
             self._pending_counterattack_needed = True
+        else:
+            print(f"[DEBUG] ❌ Counterattack NOT triggered.")
 
         return logs
+
     
     def flush_counterattacks(self, heroes):
         if not getattr(self, '_pending_counterattack_needed', False):
@@ -138,40 +155,66 @@ class Boss:
         return logs
 
 
-
-
     def calculate_damage_to_hero(self, hero, base_damage):
         if not hero.is_alive():
             return 0
         damage = base_damage
 
+        # ✅ Apply Shrink Debuff
         if self.shrink_debuff:
             damage *= self.shrink_debuff.get("multiplier_dealt", 1)
 
+        # ✅ Apply All Damage Dealt (ADD), clamped
+        effective_add = max(-0.99, self.all_damage_dealt / 100)
+        damage *= (1 + effective_add)
+
+        # ✅ Apply Holy Damage (also additive)
+        effective_holy = max(0, self.hd / 100)
+        damage *= (1 + effective_holy)
+
+        # ✅ Apply Damage Output Debuff (from e.g., LBRM transition)
+        effective_output = max(-0.99, getattr(self, "damage_output", 0) / 100)
+        damage *= (1 + effective_output)
+
+        # ✅ Armor Reduction
         armor = hero.armor
         armor_reduction = min(armor / (100 * 20 + 180), 0.75)
         damage *= (1 - armor_reduction)
 
+        # ✅ DR (Damage Reduction)
         dr = min(getattr(hero, "DR", 0) / 100, 0.75)
         damage *= (1 - dr)
 
+        # ✅ ADR (All Damage Reduction)
         adr = min(getattr(hero, "ADR", 0) / 100, 0.75)
         damage *= (1 - adr)
 
+        # ✅ Flat Global Damage Reduction (e.g., LFA)
+        if hasattr(hero, "name"):
+            if hero.name == "LFA":
+                damage *= 0.90
+            else:
+                damage *= 0.70
+
+        # ✅ DT Resistance
         if hasattr(hero, "dt_level") and hero.dt_level > 0:
             reduction = min(hero.dt_level * 0.05 + 0.05, 0.80)
             damage = int(damage * (1 - reduction))
+
         damage = max(0, int(damage))
 
+        # ✅ Shield Absorption
         if hero.shield > 0:
             absorbed = min(hero.shield, damage)
             hero.shield -= absorbed
             damage -= absorbed
 
+        # ✅ Unbending Will (trait)
         if hasattr(hero, "trait_enable") and hasattr(hero.trait_enable, "prevent_death"):
             if hero.trait_enable.prevent_death(hero, damage):
                 damage = hero.hp - 1
 
+        # ✅ Final HP Subtraction
         hero.hp -= damage
         hero.hp = max(hero.hp, 0)
 
@@ -184,16 +227,54 @@ class Boss:
         previous = hero.calamity
         hero.calamity += amount
         self._round_calamity_gains.append(f"{hero.name} +{amount} (Total: {hero.calamity})")
+
         if previous < 5 and hero.calamity >= 5:
             from game_logic.control_effects import apply_control_effect
-            for effect in ["silence", "fear", "seal_of_light"]:
-                if hero.immune_control_effect == effect:
-                    continue
-                else:
-                    apply_control_effect(hero, effect, boss=boss, team=hero.team if hasattr(hero, 'team') else None)
-                    if boss:  # 👈 very important
+
+            effects_to_apply = [
+                effect for effect in ["silence", "fear", "seal_of_light"]
+                if hero.immune_control_effect != effect
+            ]
+
+            if effects_to_apply:
+                control_logs, applied_effects = apply_control_effect(
+                    hero,
+                    effects_to_apply,
+                    boss=boss,
+                    team=hero.team if hasattr(hero, 'team') else None
+                )
+                logs.extend(control_logs)
+                for effect in applied_effects:
+                    if boss:
                         boss.on_hero_controlled(hero, effect)
+            else:
+                logs.append(f"❌ {hero.name} is immune to all control effects — no control applied.")
+
+            # ✅ Apply or refresh -100% Control Immunity (Skill Effect)
+            existing_key = None
+            for key, v in hero.buffs.items():
+                if v.get("attribute") == "control_immunity" and v.get("bonus", 0) < 0 and v.get("skill_effect"):
+                    existing_key = key
+                    break
+
+            ctrl_reduction_buff = {
+                "attribute": "control_immunity",
+                "bonus": -100,
+                "rounds": 2,
+                "skill_effect": True
+            }
+
+            if existing_key:
+                hero.buffs[existing_key] = ctrl_reduction_buff
+                logs.append(f"🔁 {hero.name}'s -100% Control Immunity debuff is refreshed (2 rounds).")
+            else:
+                hero.apply_buff("calamity_ctrl_down", ctrl_reduction_buff)
+                logs.append(f"🔻 {hero.name}: -100% Control Immunity (2 rounds from Calamity trigger).")
+
+            # ✅ Reset Calamity
             hero.calamity = 0
+
+
 
 
     def boss_action(self, heroes, round_num):
@@ -224,7 +305,7 @@ class Boss:
 
             # Apply debuffs silently
             hero.apply_buff("armor_down", {"attribute": "armor", "bonus": -1.0, "rounds": 3, "is_percent": True})
-            hero.apply_buff("atk_steal", {"attribute": "atk", "bonus": -int(hero.atk * 0.08), "rounds": 3})
+            hero.apply_buff("atk_steal", {"attribute": "atk", "bonus": -0.08, "rounds": 3})
 
             # Apply Curse
             hero.curse_of_decay += 2
@@ -232,7 +313,6 @@ class Boss:
             curse_totals.append(str(hero.curse_of_decay))
 
             # Apply Calamity
-            previous_calamity = hero.calamity
             self.add_calamity_with_tracking(hero, 2, logs, boss=self)
             calamity_names.append(hero.name)
             calamity_totals.append(str(hero.calamity))
@@ -295,8 +375,8 @@ class Boss:
             bonus = buff.get("bonus", 0)
             if attr == "HD":
                 self.hd -= bonus
-            elif attr == "all_damage_bonus":
-                self.all_damage_bonus -= bonus
+            elif attr == "all_damage_dealt":
+                self.all_damage_dealt -= bonus
             elif attr == "atk":
                 self.atk -= bonus
             del self.buffs[buff_name]
@@ -308,22 +388,11 @@ class Boss:
             BuffHandler.apply_buff(self, f"fear_buff_{random.randint(1,99999)}", {"attribute": "HD", "bonus": 50, "rounds": 15})
             self._round_passive_bonuses["HD"] += 50
         elif effect == "seal_of_light":
-            BuffHandler.apply_buff(self, f"seal_buff_{random.randint(1,99999)}", {"attribute": "all_damage_bonus", "bonus": 15, "rounds": 15})
-            self._round_passive_bonuses["ADD"] += 15
+             BuffHandler.apply_buff(self, f"seal_buff_{random.randint(1,99999)}", {"attribute": "all_damage_dealt", "bonus": 15, "rounds": 15})
         elif effect == "silence":
             self.energy += 50
             self._round_passive_bonuses["Energy"] += 50
 
-
-    def process_control_buffs(self, heroes):
-        for h in heroes:
-            if h.has_fear:
-                self.on_hero_controlled(h, "fear")
-            if h.has_silence:
-                self.on_hero_controlled(h, "silence")
-            if h.has_seal_of_light:
-                self.on_hero_controlled(h, "seal_of_light")
-        return []
 
     def process_poison(self):
         total_poison = 0
@@ -360,26 +429,28 @@ class Boss:
         if alive_heroes:
             hero_high = max(alive_heroes, key=lambda h: h.atk)
             hero_high.energy = max(hero_high.energy - 100, 0)
-            hero_high.apply_buff("boss_attack_debuff", {"attack_multiplier": 0.60, "rounds": 2})
+            hero_high.apply_buff("boss_attack_debuff", {"attribute": "atk", "bonus": -0.40, "rounds": 2})
             hero_high.curse_of_decay += 3
             logs.append(f"🌀 Drains {hero_high.name}: -100 energy, -40% ATK, +3 Curse")
 
-        bonus = int(self.atk * 0.15)
         BuffHandler.apply_buff(self, "end_of_round_atk_buff", {
-            "attribute": "atk", "bonus": bonus, "rounds": 9999
+            "attribute": "atk", "bonus": 0.15, "rounds": 9999
         })
         self.attribute_effects.append({
             "attribute": "atk",
-            "value": bonus,
+            "value": 0.15,
             "rounds": 9999,
             "name": "ATK buff"
         })
-        logs.append(f"📈 Boss +{bonus} ATK")
+        logs.append(f"📈 Boss gains +15% ATK")
 
         if alive_heroes:
             highest_atk = max(alive_heroes, key=lambda h: h.atk)
             if highest_atk.calamity > 0:
-                attr_buffs = [k for k, v in highest_atk.buffs.items() if isinstance(v, dict) and v.get("attribute") in BuffHandler.ATTRIBUTE_BUFF_KEYS]
+                attr_buffs = [
+                    k for k, v in highest_atk.buffs.items()
+                    if isinstance(v, dict) and v.get("attribute") in BuffHandler.ATTRIBUTE_BUFF_KEYS
+                ]
                 if attr_buffs:
                     to_remove = random.choice(attr_buffs)
                     del highest_atk.buffs[to_remove]
@@ -388,7 +459,6 @@ class Boss:
         for hero in alive_heroes:
             if hero.calamity == 0:
                 hero.calamity += 1  # Silent +1 Calamity
-
 
         if self._round_curse_offsets:
             logs.append(f"💀 Curse offset damage this round: {', '.join(self._round_curse_offsets)}")
@@ -411,6 +481,7 @@ class Boss:
         self.process_buffs()
         self.recalculate_stats()
         return logs
+
     
     def counterattack(self, heroes):
         logs = self.flush_counterattacks(heroes)
@@ -418,8 +489,8 @@ class Boss:
 
     def get_status_description(self):
         status = f"{self.name} Status:  HP {self.hp:.1e} | ⚡ {self.energy} | 🔥 ATK {self.atk}"
-        if self.all_damage_bonus:
-            status += f" | +{self.all_damage_bonus}% DMG"
+        if self.all_damage_dealt:
+            status += f" | +{self.all_damage_dealt}% DMG"
         if self.hd:
             status += f" | +{self.hd} HD"
         if self.dr:

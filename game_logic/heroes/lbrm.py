@@ -44,28 +44,48 @@ class LBRM(Hero):
         return logs
 
     def basic_attack(self, boss, team):
-        logs = []
         if getattr(self, "power_of_dream", 0) >= 2:
             self.power_of_dream = 0
             self.energy += 50
             return self.active_skill(boss, team)
-        extra = min(int(0.15 * boss.hp), int(30 * self.atk))
-        logs.extend(hero_deal_damage(self, boss, self.atk * (10+self.skill_damage/100), is_active=False, team=team))
-        logs.append(f"➕ {self.name} deals additional {extra} flat damage from Magnification.")
-        boss.hp -= extra
-        return logs
+
+        def do_attack():
+            logs = []
+            # ✅ Main hit triggers counter
+            logs.extend(hero_deal_damage(
+                self, boss, self.atk * (10 + self.skill_damage / 100),
+                is_active=False, team=team, allow_counter=True
+            ))
+
+            # ✅ Flat bonus = no counter
+            extra = min(int(0.15 * boss.hp), int(30 * self.atk))
+            logs.append(f"➕ {self.name} deals additional {extra} flat damage from Magnification.")
+            boss.hp -= extra
+
+            return logs
+
+        return self.with_basic_flag(do_attack)
+
 
     def active_skill(self, boss, team):
         if self.has_seal_of_light:
             return []
+
         self.ctrl_removal_limit = min(2, self.ctrl_removal_limit + 1)
         logs = []
-        logs.extend(hero_deal_damage(self, boss, self.atk * (24+self.skill_damage/100), is_active=True, team=team))
+
+        # ✅ Main hit — triggers counterattack
+        logs.extend(hero_deal_damage(
+            self, boss, self.atk * (24 + self.skill_damage / 100),
+            is_active=True, team=team, allow_counter=True
+        ))
+
         logs.append("🔻 Boss -15 Control Immunity (3 rounds).")
         boss.apply_buff("ctrl_immunity_down", {"decrease": 15, "rounds": 3})
 
         buffs_applied = []
 
+        # Wings → fastest ally
         ally_wings = max(team.heroes, key=lambda h: h.spd)
         BuffHandler.apply_buff(ally_wings, "wings_buff", {"attribute": "spd", "bonus": 8, "rounds": 4})
         BuffHandler.apply_buff(ally_wings, "wings_ctrl", {"attribute": "control_immunity", "bonus": 8, "rounds": 4})
@@ -74,15 +94,17 @@ class LBRM(Hero):
         ally_wings.extra_ctrl_removals = min(getattr(ally_wings, "extra_ctrl_removals", 0) + 1, 2)
         ally_wings.wings_from_transition = False
 
+        # Magnification → highest ATK
         ally_mag = max(team.heroes, key=lambda h: h.atk)
         BuffHandler.apply_buff(ally_mag, "magnification_buff", {"attribute": "all_damage_dealt", "bonus": 10, "rounds": 4})
         buffs_applied.append((ally_mag.name, "+10% All Damage Dealt (Magnification)"))
         ally_mag.magnification_effect = True
 
+        # Protection → lowest HP
         ally_prot = min(team.heroes, key=lambda h: h.hp)
         shield_amt = int(ally_prot.atk * 28)
         ally_prot.apply_buff("protection_shield", {"attribute": "shield", "shield": shield_amt, "rounds": 4})
-        buffs_applied.append((ally_prot.name, f"+{shield_amt//1_000_000}M Shield (Protection)"))
+        buffs_applied.append((ally_prot.name, f"+{shield_amt // 1_000_000}M Shield (Protection)"))
         ally_prot.protection_effect = True
 
         self.transition_power += 6
@@ -92,6 +114,7 @@ class LBRM(Hero):
             logs.extend(group_team_buffs(buffs_applied))
 
         return logs
+
 
     def release_transition_skill(self, boss, team):
         if self.has_seal_of_light:
@@ -144,7 +167,7 @@ class LBRM(Hero):
         BuffHandler.apply_buff(best_ally, "dmg_up", {"attribute": "all_damage_dealt", "bonus": 15, "rounds": 2})
         buffs_applied.append((best_ally.name, "+15% All Damage Dealt (Best Ally)"))
 
-        BuffHandler.apply_debuff(boss, "dmg_down", {"attribute": "all_damage_dealt", "bonus": -10, "rounds": 2})
+        BuffHandler.apply_debuff(boss, "dmg_down", {"attribute": "damage_output", "bonus": -10, "rounds": 2})
         logs.append("🔻 Boss: -10% All Damage (2 rounds).")
 
         for ally in team.back_line:

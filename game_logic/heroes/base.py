@@ -28,6 +28,7 @@ class Hero:
         self.armor = armor
         self.original_armor = armor
         self.spd = spd
+        self.skill_damage = 0
         self.crit_rate = crit_rate
         self.crit_dmg = crit_dmg
         self.ctrl_immunity = ctrl_immunity  # ✅ Correct here
@@ -439,3 +440,11 @@ class Hero:
 
         logs.append(f"🔻 {self.name} takes {damage // 1_000_000}M damage.")
         return logs
+
+    def with_basic_flag(self, damage_func):
+        """Temporarily marks an action as a basic attack for counterattack logic."""
+        self._current_action_type = "basic"
+        try:
+            return damage_func()
+        finally:
+            del self._current_action_type

@@ -2,6 +2,7 @@
 import random
 from game_logic.buff_handler import BuffHandler
 from utils.log_utils import group_team_buffs
+from game_logic.damage_utils import apply_flat_reduction
 
 def stylize_log(category, message):
     icons = {
@@ -31,31 +32,41 @@ class Scissors(Artifact):
     def apply_end_of_round(self, hero, team, boss, round_num):
         replicated_msgs = []
         if hasattr(self, "owner") and self.owner and self.owner.has_seal_of_light:
-            return [stylize_log("info", f"{self.owner.name}'s Mirror is sealed by Seal of Light.")]
+            return [stylize_log("info", f"{self.owner.name}'s Scissors is sealed by Seal of Light.")]
 
-        # Replicate Boss HD
-        if boss.hd > 0:
-            scaled_hd = int(boss.hd * 0.3)
-            for target in team.get_line(hero):
-                target.apply_buff(f"scissors_hd_{hero.name}_{round_num}", {
-                    "attribute": "hd",
-                    "bonus": scaled_hd,
-                    "rounds": 15  # Boss Fear HD buffs last 15 rounds → we match that
-                })
-                replicated_msgs.append(stylize_log("buff", f"{target.name} replicates {scaled_hd} HD from Boss (Scissors)."))
+        for buff_name, buff in boss.buffs.items():
+            if not isinstance(buff, dict):
+                continue
 
-        # Replicate Boss ATK (optional)
-        if boss.atk > 0:
-            scaled_atk = int(boss.atk * 0.3)
+            attr = buff.get("attribute")
+            bonus = buff.get("bonus", 0)
+            duration = buff.get("rounds", 1)
+
+            # Only replicate positive ATK or HD buffs
+            if attr not in {"atk", "hd"} or bonus <= 0:
+                continue
+
+            scaled_bonus = bonus * 0.3
+            if abs(scaled_bonus) < 1e-6:
+                continue
+
             for target in team.get_line(hero):
-                target.apply_buff(f"scissors_atk_{hero.name}_{round_num}", {
-                    "attribute": "atk",
-                    "bonus": scaled_atk,
-                    "rounds": 9999  # Boss ATK buff is permanent stacking
-                })
-                replicated_msgs.append(stylize_log("buff", f"{target.name} replicates {scaled_atk} ATK from Boss (Scissors)."))
+                buff_data = {
+                    "attribute": attr,
+                    "bonus": scaled_bonus,
+                    "rounds": duration
+                }
+                if isinstance(bonus, float) and abs(bonus) < 1.0:
+                    buff_data["is_percent"] = True  # Preserve percent flag for Specter, inversion, etc.
+
+                target.apply_buff(f"scissors_repl_{buff_name}_{round_num}", buff_data)
+
+                replicated_msgs.append(
+                    stylize_log("buff", f"{target.name} replicates +{scaled_bonus:.3f} {attr.upper()} from {buff_name} (Scissors).")
+                )
 
         return replicated_msgs
+
 
 
 class DB(Artifact):
@@ -79,8 +90,13 @@ class DB(Artifact):
             for hero in team.heroes:
                 if hero.curse_of_decay > 0:
                     hero.curse_of_decay -= 1
-                    damage = boss.atk * 30
-                    hero.hp -= damage
+                    damage = apply_flat_reduction(hero, boss.atk * 30)
+                    if hasattr(hero, "take_damage"):
+                        cod_logs = hero.take_damage(damage, source_hero=boss, team=team)
+                        cod_logs = cod_logs if isinstance(cod_logs, list) else [cod_logs]
+                    else:
+                        hero.hp -= damage
+                        cod_logs = [f"{hero.name} takes {damage / 1e6:.0f}M damage."]
                     if hero.hp < 0:
                         hero.hp = 0
                     logs.append(f"💀 Curse of Decay offsets energy buff on {hero.name}. Takes {int(damage):,} damage. (1 layer removed)")
@@ -159,8 +175,12 @@ class Mirror(Artifact):
         
         if hero.curse_of_decay > 0:
             hero.curse_of_decay -= 1
-            damage = boss.atk * 30
-            hero.hp -= damage
+            damage = apply_flat_reduction(hero, boss.atk * 30)
+            if hasattr(hero, "take_damage"):
+                hero.take_damage(damage, source_hero=boss, team=team)
+            else:
+                hero.hp -= damage
+
             if hero.hp < 0:
                 hero.hp = 0
             msgs.append(f"💀 Curse of Decay offsets energy buff on {hero.name}. Takes {int(damage):,} damage. (1 layer removed)")
@@ -226,8 +246,13 @@ class dMirror(Mirror):
         # Regular energy bonus (+15 energy)
         if hero.curse_of_decay > 0:
             hero.curse_of_decay -= 1
-            damage = boss.atk * 30
-            hero.hp -= damage
+            damage = apply_flat_reduction(hero, boss.atk * 30)
+            if hasattr(hero, "take_damage"):
+                cod_logs = hero.take_damage(damage, source_hero=boss, team=team)
+                cod_logs = cod_logs if isinstance(cod_logs, list) else [cod_logs]
+            else:
+                hero.hp -= damage
+                cod_logs = [f"{hero.name} takes {damage / 1e6:.0f}M damage."]
             if hero.hp < 0:
                 hero.hp = 0
             msgs.append(f"💀 Curse of Decay offsets energy buff on {hero.name}. Takes {int(damage):,} damage. (1 layer removed)")
