@@ -26,17 +26,23 @@ def apply_control_effect(hero, effects, *args, boss=None, team=None):
         if hero.immune_control_effect == effect_name:
             logs.append(f"🚫 {hero.name} is permanently immune to {effect_name}.")
             continue
+        ctrl_immunity = getattr(hero, "ctrl_immunity", 0)
+        if boss:
+            ctrl_immunity = max(0, ctrl_immunity - 100)  # Boss ignores 100
 
-        raw_ctrl = getattr(hero, "ctrl_immunity", 0)
-        effective_ctrl = min(max(raw_ctrl, 0), 100)
-        if random.random() < (effective_ctrl / 100):
-            logs.append(f"🛡️ {hero.name} resists {effect_name.replace('_', ' ').title()} ({effective_ctrl}% Control Immunity).")
+        resist_chance = min(max(ctrl_immunity, 0), 100)
+        if random.random() < (resist_chance / 100):
+            logs.append(f"🛡️ {hero.name} resists {effect_name.replace('_', ' ').title()} ({resist_chance}% Control Immunity).")
             continue
+
 
         # ✅ Skip if already under this control effect
+        # Already afflicted — skip reapplying, but still trigger boss passive
         if getattr(hero, f"has_{effect_name}", False):
-            logs.append(f"⚠️ {hero.name} already has {effect_name}. Skipping reapplication.")
+            if boss:
+                boss.on_hero_controlled(hero, effect_name)
             continue
+
 
         # ✅ Apply control effect
         setattr(hero, f"has_{effect_name}", True)

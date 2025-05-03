@@ -1,7 +1,7 @@
 import random
 from game_logic.buff_handler import BuffHandler
 from game_logic.control_effects import apply_control_effect, clear_control_effect
-
+from utils.log_utils import debug
 from utils.log_utils import stylize_log
 
 class Boss:
@@ -9,8 +9,8 @@ class Boss:
         self.name = "Boss"
         self.max_hp = 20_000_000_000_000_000_000
         self.hp = self.max_hp
-        self.atk = 100_000_000
-        self.base_atk = 100_000_000
+        self.atk = 500_000_000
+        self.base_atk = 500_000_000
         self.dr = 0
         self.block = 0
         self.dodge = 0
@@ -247,17 +247,22 @@ class Boss:
         return self.calculate_damage_to_hero(hero, base_damage)
 
     def add_calamity_with_tracking(self, hero, amount, logs, boss=None):
+        from logging import debug
         previous = hero.calamity
         hero.calamity += amount
+        debug(f"[DEBUG] {hero.name} Calamity: {previous} → {hero.calamity} (added {amount})")
         self._round_calamity_gains.append(f"{hero.name} +{amount} (Total: {hero.calamity})")
 
         if previous < 5 and hero.calamity >= 5:
+            debug(f"[DEBUG] {hero.name} triggered Calamity threshold (>=5)")
             from game_logic.control_effects import apply_control_effect
 
             effects_to_apply = [
                 effect for effect in ["silence", "fear", "seal_of_light"]
                 if hero.immune_control_effect != effect
             ]
+            debug(f"[DEBUG] {hero.name} is immune to: {hero.immune_control_effect}")
+            debug(f"[DEBUG] {hero.name} eligible control effects: {effects_to_apply}")
 
             if effects_to_apply:
                 control_logs, applied_effects = apply_control_effect(
@@ -267,35 +272,18 @@ class Boss:
                     team=hero.team if hasattr(hero, 'team') else None
                 )
                 logs.extend(control_logs)
-                for effect in applied_effects:
-                    if boss:
-                        boss.on_hero_controlled(hero, effect)
+                debug(f"[DEBUG] {hero.name} afflicted with: {applied_effects}")
             else:
                 logs.append(f"❌ {hero.name} is immune to all control effects — no control applied.")
+                debug(f"[DEBUG] {hero.name} received no control effects (full immunity)")
 
-            # ✅ Apply or refresh -100% Control Immunity (Skill Effect)
-            existing_key = None
-            for key, v in hero.buffs.items():
-                if v.get("attribute") == "control_immunity" and v.get("bonus", 0) < 0 and v.get("skill_effect"):
-                    existing_key = key
-                    break
 
-            ctrl_reduction_buff = {
-                "attribute": "control_immunity",
-                "bonus": -100,
-                "rounds": 2,
-                "skill_effect": True
-            }
 
-            if existing_key:
-                hero.buffs[existing_key] = ctrl_reduction_buff
-                logs.append(f"🔁 {hero.name}'s -100% Control Immunity debuff is refreshed (2 rounds).")
-            else:
-                hero.apply_buff("calamity_ctrl_down", ctrl_reduction_buff)
-                logs.append(f"🔻 {hero.name}: -100% Control Immunity (2 rounds from Calamity trigger).")
-
-            # ✅ Reset Calamity
+            # Reset Calamity
+            debug(f"[DEBUG] {hero.name} Calamity reset to 0 after triggering effects")
             hero.calamity = 0
+
+
 
 
 
@@ -408,13 +396,18 @@ class Boss:
 
     def on_hero_controlled(self, hero, effect):
         if effect == "fear":
-            BuffHandler.apply_buff(self, f"fear_buff_{random.randint(1,99999)}", {"attribute": "HD", "bonus": 50, "rounds": 15})
-            self._round_passive_bonuses["HD"] += 50
-        elif effect == "seal_of_light":
-             BuffHandler.apply_buff(self, f"seal_buff_{random.randint(1,99999)}", {"attribute": "all_damage_dealt", "bonus": 15, "rounds": 15})
+            BuffHandler.apply_buff(self, f"hd_from_fear_{random.randint(0, 999999)}", {
+                "attribute": "HD", "bonus": 50, "rounds": 15
+            })
+            debug(f"[DEBUG] Boss gains +50% HD from {hero.name}'s Fear")
         elif effect == "silence":
             self.energy += 50
-            self._round_passive_bonuses["Energy"] += 50
+            debug(f"[DEBUG] Boss gains +50 energy from {hero.name}'s Silence")
+        elif effect == "seal_of_light":
+            BuffHandler.apply_buff(self, f"add_from_seal_{random.randint(0, 999999)}", {
+                "attribute": "all_damage_dealt", "bonus": 15, "rounds": 15
+            })
+            debug(f"[DEBUG] Boss gains +15% All Damage Dealt from {hero.name}'s Seal of Light")
 
 
     def process_poison(self):

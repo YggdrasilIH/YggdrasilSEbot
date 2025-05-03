@@ -32,15 +32,20 @@ boss = Boss()
 # Enable PDECore globally
 active_core = PDECore()
 
-# Trigger one basic attack from each hero
+# Run 3 total rounds
 logs = []
-for hero in heroes:
-    if hero.is_alive():
-        hero._using_real_attack = True
-        logs += hero_deal_damage(hero, boss, int(hero.atk * 12), is_active=False, team=team)
 
-# Trigger counterattack processing
-logs += boss.flush_counterattacks(heroes)
+for round_num in range(1, 4):
+    logs.append(f"\n🔁 ROUND {round_num} 🔁")
+
+    # Each hero performs a basic attack
+    for hero in heroes:
+        if hero.is_alive():
+            hero._using_real_attack = True
+            logs += hero_deal_damage(hero, boss, int(hero.atk * 12), is_active=False, team=team)
+
+    # Boss performs counterattacks
+    logs += boss.flush_counterattacks(heroes)
 
 # Summary
 print("\n--- COUNTERATTACK TEST SUMMARY ---")
