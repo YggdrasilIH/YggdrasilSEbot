@@ -16,33 +16,43 @@ def apply_control_effect(hero, effects, *args, boss=None, team=None):
     control_afflicted = []
 
     for effect_name in effects:
+        # Skip if hero already has this control effect
+        if getattr(hero, f"has_{effect_name}", False):
+            continue
+
         duration = active_core.modify_control_duration(2) if active_core else 2
 
         # Static immunity to one effect
         if hero.immune_control_effect == effect_name:
+            logs.append(f"🚫 {hero.name} is permanently immune to {effect_name}.")
             continue
 
-        # ✅ Clamp control immunity between 0 and 100
         raw_ctrl = getattr(hero, "ctrl_immunity", 0)
         effective_ctrl = min(max(raw_ctrl, 0), 100)
         if random.random() < (effective_ctrl / 100):
             logs.append(f"🛡️ {hero.name} resists {effect_name.replace('_', ' ').title()} ({effective_ctrl}% Control Immunity).")
             continue
 
+        # ✅ Skip if already under this control effect
+        if getattr(hero, f"has_{effect_name}", False):
+            logs.append(f"⚠️ {hero.name} already has {effect_name}. Skipping reapplication.")
+            continue
+
         # ✅ Apply control effect
         setattr(hero, f"has_{effect_name}", True)
         setattr(hero, f"{effect_name}_rounds", duration)
         control_afflicted.append(effect_name)
+        logs.append(f"💥 {hero.name} receives {effect_name.replace('_', ' ').title()} for {duration} rounds.")
+
+        if boss:
+            boss.on_hero_controlled(hero, effect_name)
 
     if control_afflicted:
         control_list = " and ".join([effect.replace("_", " ").capitalize() for effect in control_afflicted])
         logs.append(f"🔋 {hero.name} is controlled by {control_list} for {duration} rounds.")
 
-        if boss:
-            for effect in control_afflicted:
-                boss.on_hero_controlled(hero, effect)
-
     return logs, control_afflicted
+
 
 
 

@@ -3,6 +3,8 @@ from game_logic.damage_utils import hero_deal_damage
 import random
 from math import floor
 from game_logic.buff_handler import BuffHandler
+from utils.log_utils import debug
+
 
 class LFA(Hero):
     def __init__(self, name, hp, atk, armor, spd, crit_rate, crit_dmg, ctrl_immunity, hd, precision,
@@ -21,10 +23,12 @@ class LFA(Hero):
 
     def active_skill(self, boss, team):
         logs = []
+        
+
         if self.has_silence:
             logs.append(f"{self.name} is silenced and cannot use active skill.")
             return logs
-
+        debug(f"{self.name} starts ACTIVE skill")
         crit_failed = False
         hits = []
 
@@ -100,6 +104,8 @@ class LFA(Hero):
 
         def do_attack():
             logs = []
+            debug(f"{self.name} starts BASIC attack")
+
 
             # ✅ Main basic hit triggers counter
             dmg = self.atk * self.skill_multiplier(9.6)

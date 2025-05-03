@@ -4,6 +4,8 @@ from game_logic.damage_utils import hero_deal_damage
 from game_logic.buff_handler import BuffHandler
 from game_logic.control_effects import clear_control_effect
 from utils.log_utils import group_team_buffs
+from utils.log_utils import debug
+
 
 class PDE(Hero):
     def __init__(self, name, hp, atk, armor, spd, crit_rate, crit_dmg, ctrl_immunity, hd, precision,
@@ -31,6 +33,7 @@ class PDE(Hero):
         if self.has_silence:
             logs.append(f"{self.name} is silenced and cannot use active skill.")
             return logs
+        debug(f"{self.name} starts ACTIVE skill")
 
         # ✅ Damage should trigger counterattack
         logs.extend(hero_deal_damage(
@@ -60,6 +63,7 @@ class PDE(Hero):
 
         def do_attack():
             logs = []
+            debug(f"{self.name} starts BASIC attack")
 
             # ✅ Main hit triggers counterattack
             logs.extend(hero_deal_damage(

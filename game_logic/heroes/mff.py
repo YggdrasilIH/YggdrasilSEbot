@@ -2,6 +2,7 @@ from .base import Hero
 from game_logic.buff_handler import BuffHandler
 from game_logic.damage_utils import hero_deal_damage
 from utils.log_utils import group_team_buffs
+from utils.log_utils import debug
 
 class MFF(Hero):
     def __init__(self, *args, **kwargs):
@@ -26,6 +27,8 @@ class MFF(Hero):
         if self.has_silence:
             logs.append(f"{self.name} is silenced and cannot use active skill.")
             return logs
+        debug(f"{self.name} starts ACTIVE skill")
+
 
         # ✅ Counterattack allowed here
         logs.extend(hero_deal_damage(
@@ -77,6 +80,8 @@ class MFF(Hero):
 
         def do_attack():
             logs = []
+            debug(f"{self.name} starts BASIC attack")
+
 
             # ✅ Main hit — counterattack should occur
             logs.extend(hero_deal_damage(

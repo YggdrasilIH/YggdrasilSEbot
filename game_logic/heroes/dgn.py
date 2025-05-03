@@ -3,6 +3,8 @@ from game_logic.damage_utils import hero_deal_damage
 from game_logic.buff_handler import BuffHandler
 from utils.log_utils import group_team_buffs
 import random
+from utils.log_utils import debug
+
 
 class DGN(Hero):
     def __init__(self, name, hp, atk, armor, spd, crit_rate, crit_dmg, ctrl_immunity, hd, precision,
@@ -31,10 +33,12 @@ class DGN(Hero):
 
     def active_skill(self, boss, team):
         logs = []
+       
+
         if self.has_silence:
             logs.append(f"{self.name} is silenced and cannot use active skill.")
             return logs
-
+        debug(f"{self.name} starts ACTIVE skill")
         # ✅ First hit triggers counterattack
         base = self.atk * (14 + self.skill_damage / 100)
         logs.extend(hero_deal_damage(
@@ -96,6 +100,8 @@ class DGN(Hero):
 
     def basic_attack(self, boss, team):
         logs = []
+        debug(f"{self.name} starts BASIC attack")
+
         if self.has_fear:
             logs.append(f"{self.name} is feared and cannot perform basic attack.")
             return logs

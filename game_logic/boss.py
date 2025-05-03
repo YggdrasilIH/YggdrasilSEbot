@@ -9,8 +9,8 @@ class Boss:
         self.name = "Boss"
         self.max_hp = 20_000_000_000_000_000_000
         self.hp = self.max_hp
-        self.atk = 500_000_000
-        self.base_atk = 500_000_000
+        self.atk = 100_000_000
+        self.base_atk = 100_000_000
         self.dr = 0
         self.block = 0
         self.dodge = 0
@@ -98,61 +98,84 @@ class Boss:
         self.total_damage_taken += effective_dmg
         logs.append(stylize_log("damage", f"Boss takes {int(effective_dmg / 1e6):.0f}M damage."))
 
+        # ✅ Patch: only enqueue attacker if it's the first hit of a skill
         if source_hero and source_hero.is_alive() and getattr(source_hero, '_using_real_attack', False):
-            print(f"[DEBUG] ✅ Counterattack flag set on boss.")
-            self._pending_counterattack_needed = True
+            print(f"[COUNTER] Queuing counterattack from {source_hero.name}")
+
+            if not hasattr(self, "_counterattack_sources"):
+                self._counterattack_sources = set()
+            if source_hero not in self._counterattack_sources:
+                self._counterattack_sources.add(source_hero)
+                print(f"[DEBUG] ✅ Counterattack queued for {source_hero.name}")
+                self._pending_counterattack_needed = True
+            else:
+                print(f"[DEBUG] 🔁 {source_hero.name} already queued for counterattack.")
         else:
             print(f"[DEBUG] ❌ Counterattack NOT triggered.")
 
         return logs
 
-    
+
+        
     def flush_counterattacks(self, heroes):
-        if not getattr(self, '_pending_counterattack_needed', False):
+        if not hasattr(self, "_counterattack_sources") or not self._counterattack_sources:
             return []
 
         logs = []
-        damage_lines = []
-        curse_heroes = []
-        curse_totals = []
-        calamity_heroes = []
-        calamity_totals = []
+        print(f"[DEBUG] flush_counterattacks → Sources: {[h.name for h in self._counterattack_sources]}")
 
-        heroes_to_add_calamity = []
+        for attacker in self._counterattack_sources:
+            logs.append(f"🌀 Boss counterattacks due to {attacker.name}'s attack.")
+            damage_lines = []
+            curse_heroes = []
+            curse_totals = []
+            calamity_heroes = []
+            calamity_totals = []
+            heroes_to_add_calamity = []
 
-        # Step 1: Deal counterattack damage first
-        for hero in heroes:
-            if not hero.is_alive():
-                continue
-            counter_damage = int(self.atk * 15)
-            final_damage = self.calculate_damage_to_hero(hero, counter_damage)
-            damage_lines.append(f"{hero.name} ({final_damage // 1_000_000}M)")
+            print(f"[DEBUG] Counterattack from {attacker.name} begins.")
 
-            if hero.is_alive():
-                heroes_to_add_calamity.append(hero)
+            for hero in heroes:
+                if not hero.is_alive():
+                    continue
 
-        if damage_lines:
-            logs.append(f"⏱️ Boss counterattacks→ {', '.join(damage_lines)}")
+                counter_damage = int(self.atk * 15)
+                print(f"[DEBUG] → Hitting {hero.name} with raw {counter_damage} damage")
 
-        # Step 2: After all damage, apply Calamity and potential Curse
-        for hero in heroes_to_add_calamity:
-            previous_calamity = hero.calamity
-            self.add_calamity_with_tracking(hero, 1, logs, boss=self)
-            calamity_heroes.append(hero.name)
-            calamity_totals.append(str(hero.calamity))
+                final_damage = self.calculate_damage_to_hero(hero, counter_damage)
+                print(f"[DEBUG] → {hero.name} took {final_damage} (after reductions), HP now {hero.hp}")
+                damage_lines.append(f"{hero.name} ({final_damage // 1_000_000}M)")
 
-            if random.random() < 0.5:
-                hero.curse_of_decay += 1
-                curse_heroes.append(hero.name)
-                curse_totals.append(str(hero.curse_of_decay))
+                if hero.is_alive():
+                    heroes_to_add_calamity.append(hero)
 
-        if curse_heroes:
-            logs.append(f"💀 {', '.join(curse_heroes)} gained 1 layer of Curse (Totals: {', '.join(curse_totals)})")
-        if calamity_heroes:
-            logs.append(f"☠️ {', '.join(calamity_heroes)} gained 1 layer of Calamity (Totals: {', '.join(calamity_totals)})")
+            if damage_lines:
+                logs.append(f"⏱️ Boss counterattack→ {', '.join(damage_lines)}")
 
+            for hero in heroes_to_add_calamity:
+                prev_calamity = hero.calamity
+                self.add_calamity_with_tracking(hero, 1, logs, boss=self)
+                print(f"[DEBUG] {hero.name} Calamity: {prev_calamity} → {hero.calamity} (from {attacker.name})")
+                calamity_heroes.append(hero.name)
+                calamity_totals.append(str(hero.calamity))
+
+                if random.random() < 0.5:
+                    hero.curse_of_decay += 1
+                    print(f"[DEBUG] {hero.name} Curse +1 from {attacker.name}, now {hero.curse_of_decay}")
+                    curse_heroes.append(hero.name)
+                    curse_totals.append(str(hero.curse_of_decay))
+
+            if curse_heroes:
+                logs.append(f"💀 {', '.join(curse_heroes)} gained 1 layer of Curse (Totals: {', '.join(curse_totals)})")
+            if calamity_heroes:
+                logs.append(f"☠️ {', '.join(calamity_heroes)} gained 1 layer of Calamity (Totals: {', '.join(calamity_totals)})")
+
+        print(f"[DEBUG] flush_counterattacks complete → {len(self._counterattack_sources)} sources, total hits: {len(heroes) * len(self._counterattack_sources)}")
         self._pending_counterattack_needed = False
+        self._counterattack_sources = set()
+
         return logs
+
 
 
     def calculate_damage_to_hero(self, hero, base_damage):

@@ -1,44 +1,43 @@
-from game_logic.heroes.base import Hero
+from game_logic.heroes.lbrm import LBRM
+from game_logic.heroes.pde import PDE
 from game_logic.boss import Boss
 from game_logic.team import Team
-from game_logic.control_effects import apply_control_effect
+from game_logic.heroes.base import Hero
+from utils.battle import chunk_logs
 
 class DummyHero(Hero):
-    def __init__(self, name):
-        super().__init__(
-            name=name,
-            hp=1_000_000_000,
-            atk=100_000_000,
-            armor=1000,
-            spd=2000,
-            crit_rate=0,
-            crit_dmg=0,
-            ctrl_immunity=0,  # Force control effect application
-            hd=0,
-            precision=0
-        )
-        self.immune_control_effect = None  # No immunity to any effect
-    
+    def active_skill(self, boss, team):
+        return [f"{self.name} does nothing (active)."]
+
+    def basic_attack(self, boss, team):
+        return [f"{self.name} does nothing (basic)."]
+
+# Instantiate heroes
+lbrm = LBRM("LBRM", 10_000_000_000, 600_000_000, 3000, 1500, 50, 50, 0, 10, 0)
+pde = PDE("PDE", 10_000_000_000, 600_000_000, 3000, 1400, 50, 50, 0, 10, 0)
+dummy_allies = [
+    DummyHero(f"Dummy{i}", 10_000_000_000, 100_000_000, 3000, 1000 + i * 10, 50, 50, 0, 10, 0)
+    for i in range(1, 5)
+]
+team = Team([lbrm, pde] + dummy_allies, front_line=[lbrm, pde], back_line=dummy_allies)
 boss = Boss()
-h1 = DummyHero("Hero1")
-h2 = DummyHero("Hero2")
-h3 = DummyHero("Hero3")
 
+# Boost boss energy so he uses active skill immediately (which gives 2 Calamity)
+boss.energy = 100
 
-# If you want all 3 on back line instead
-heroes = [h1, h2, h3]
-team = Team(heroes, front_line=[], back_line=heroes)
+# Force initial Calamity stack via direct method to simulate counterattacks and debuffs
+for h in [dummy_allies[0], dummy_allies[1], lbrm, pde]:
+    boss.add_calamity_with_tracking(h, 3, logs=[], boss=boss)  # Now they'll hit 5 after counterattack
 
-
-logs = ["--- CONTROL INFLICT TEST ---"]
-
+# Set energy so all heroes use their actives
 for hero in team.heroes:
-    hero.calamity = 5
-    logs.append(f"{hero.name} hits 5 Calamity.")
-    logs += apply_control_effect(hero, ["fear", "silence", "seal_of_light"], boss=boss, team=team)
+    hero.energy = 500
 
-logs.append("\n--- Boss Buffs After Control ---")
-logs.append(boss.get_status_description())
+# Simulate Round 1
+print("🔁 Starting Round 1 Simulation")
+active_logs = team.perform_turn(boss, round_num=1)
+end_logs = team.end_of_round(boss, round_num=1)
 
-for log in logs:
-    print(log)
+# Print
+print("\n".join(chunk_logs("\n".join(active_logs))))
+print("\n".join(chunk_logs("\n".join(end_logs))))

@@ -29,3 +29,5 @@ def group_team_buffs(buffs_applied):
 
     return logs
 
+def debug(message: str):
+    print(f"[DEBUG] {message}")

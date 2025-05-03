@@ -25,20 +25,20 @@ def apply_burn(target, damage, rounds, source=None, label="Burn"):
         logs.append(f"⚠️ Burn failed: {target.name} has no poison_effects list.")
     return logs
 
-
 def hero_deal_damage(source, target, base_damage, is_active, team, allow_counter=True, allow_crit=True):
     logs = []
     if not target.is_alive():
         return logs
 
-    # 🧠 Only tag real attacks (basic/active) vs Boss
     manually_flagged = hasattr(source, "_using_real_attack") and source._using_real_attack
     temp_flagged = False
 
     is_basic = getattr(source, "_current_action_type", None) == "basic"
     is_basic_or_active = is_active or is_basic
 
+    # 🧠 Inject real_attack flag if this is an active or basic vs Boss
     if isinstance(target, Boss) and allow_counter and is_basic_or_active and not manually_flagged:
+        print(f"[DEBUG] Auto-setting _using_real_attack for {source.name} (target is Boss).")
         source._using_real_attack = True
         temp_flagged = True
 
@@ -54,7 +54,7 @@ def hero_deal_damage(source, target, base_damage, is_active, team, allow_counter
     damage *= (1 + source.all_damage_dealt / 100)
     phase1 = damage
 
-    # Phase 2 bonuses
+    # Phase 2 multipliers
     poison_bonus = 0
     if any(isinstance(b, dict) and b.get("attribute") == "poison" for b in getattr(target, "buffs", {}).values()):
         poison_bonus = getattr(source, "bonus_damage_vs_poisoned", 0)
@@ -73,7 +73,6 @@ def hero_deal_damage(source, target, base_damage, is_active, team, allow_counter
             gk = min(bonus_steps * 0.02, 1.0)
 
     defier = 0.30 if getattr(source, "defier", False) and target.hp >= 0.70 * target.max_hp else 0
-
     hp_bonus = 0
     if target.hp > source.hp:
         hp_bonus = 0.12
@@ -132,9 +131,12 @@ def hero_deal_damage(source, target, base_damage, is_active, team, allow_counter
         source.total_damage_dealt += damage
 
     if hasattr(target, "take_damage"):
+        print(f"[DEBUG] {source.name} → Dealing {damage} to {target.name} (calling take_damage)")
         logs += target.take_damage(damage, source, team) or []
     else:
         target.hp -= damage
+
+    print(f"[DEBUG] {source.name} → Final damage to {target.name}: {damage} (real_attack={getattr(source, '_using_real_attack', False)})")
 
     if damage > 0:
         logs.append(f"🟢 {source.name} deals {damage // 1_000_000}M damage to {target.name} ({'CRIT' if crit else 'Normal'} hit).")
@@ -150,12 +152,12 @@ def hero_deal_damage(source, target, base_damage, is_active, team, allow_counter
     if hasattr(target, "on_receive_damage"):
         logs += target.on_receive_damage(damage, team, source) or []
 
-    if allow_counter and hasattr(target, "counterattack"):
-        logs += target.counterattack(team.heroes)
+    # ❌ Do NOT flush counterattack here
+    # Boss will handle it at end of hero turns
 
-    # 🧼 Reset temporary flag if we injected it
     if temp_flagged:
         source._using_real_attack = False
+        print(f"[DEBUG] {source.name} → Reset _using_real_attack after temporary injection.")
 
     return logs
 
