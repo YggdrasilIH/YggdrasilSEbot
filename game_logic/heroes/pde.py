@@ -154,8 +154,16 @@ class PDE(Hero):
             logs.append(f"✨ PDE grants Mystical Veil: {self.name} & {target.name}")
 
             heal_amt = int(self.atk * 12)
+            before_self = self.hp
+            before_target = target.hp
             self.hp = min(self.max_hp, self.hp + heal_amt)
             target.hp = min(target.max_hp, target.hp + heal_amt)
+            actual_self = self.hp - before_self
+            actual_target = target.hp - before_target
+            self._healing_done += actual_self
+            target._healing_done += actual_target
+            debug(f"{self.name} transition heals {self.name} for {actual_self} HP ({actual_self / 1e6:.1f}M)")
+            debug(f"{self.name} transition heals {target.name} for {actual_target} HP ({actual_target / 1e6:.1f}M)")
             logs.append(f"🩹 PDE heals: {self.name} & {target.name} for {heal_amt // 1_000_000}M each.")
 
             buffs_applied = []

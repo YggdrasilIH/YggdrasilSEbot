@@ -143,7 +143,6 @@ class Team:
             if hero.is_alive():
                 self.energy_gain_on_being_hit(hero, logs, crit_occurred)
 
-        # ✅ Handle Mirror Wings AFTER calamity-triggered control effects
         for hero in self.heroes:
             for effect in ["fear", "silence", "seal_of_light"]:
                 if hasattr(hero, "handle_self_control_removal"):

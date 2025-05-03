@@ -136,8 +136,13 @@ class SQH(Hero):
                 if getattr(ally, "queens_guard", False):
                     atk_buffs += ally.apply_attribute_buff_with_curse("atk", 10, boss)
                     heal_amt = int(ally.max_hp * 0.50)
+                    before = ally.hp
                     ally.hp = min(ally.max_hp, ally.hp + heal_amt)
-                    heals.append(f"{ally.name} +{self.format_damage_log(heal_amt)} (+10% ATK)")
+                    actual = ally.hp - before
+                    ally._healing_done += actual
+                    debug(f"{self.name} transition heals {ally.name} (Queen’s Guard) for {actual} HP ({actual / 1e6:.1f}M)")
+                    heals.append(f"{ally.name} +{self.format_damage_log(actual)} (+10% ATK)")
+
 
             if atk_buffs:
                 logs.append("🛡️ Queen's Guard Buffs: " + " | ".join(atk_buffs))
@@ -177,8 +182,13 @@ class SQH(Hero):
 
             heal_all = int(self.atk * 12)
             for ally in team.heroes:
+                before = ally.hp
                 ally.hp = min(ally.max_hp, ally.hp + heal_all)
+                actual = ally.hp - before
+                ally._healing_done += actual
+                debug(f"{self.name} transition heals {ally.name} (team-wide) for {actual} HP ({actual / 1e6:.1f}M)")
             logs.append(f"❤️ Team Heal: {self.format_damage_log(heal_all)} each (1200% ATK).")
+
 
             return logs
 
@@ -187,16 +197,26 @@ class SQH(Hero):
             return super().end_of_round(boss, team, round_num)  # Passive healing blocked by Seal of Light
         logs = super().end_of_round(boss, team, round_num)
         heal_self = int(self.max_hp * 0.20)
+        before = self.hp
         self.hp = min(self.max_hp, self.hp + heal_self)
-        logs.append(f"💖 {self.name} heals self for {self.format_damage_log(heal_self)}.")
+        actual = self.hp - before
+        self._healing_done += actual
+        debug(f"{self.name} passive self-heals: {actual} HP ({actual / 1e6:.1f}M)")
+        logs.append(f"💖 {self.name} heals self for {self.format_damage_log(actual)}.")
+
 
         alive_count = sum(1 for h in team.heroes if h.is_alive())
         ally_heals = []
         for ally in team.heroes:
             if ally != self and ally.is_alive():
                 heal_amt = int(ally.max_hp * 0.016 * alive_count)
+                before = ally.hp
                 ally.hp = min(ally.max_hp, ally.hp + heal_amt)
-                ally_heals.append(f"{ally.name} +{self.format_damage_log(heal_amt)}")
+                actual = ally.hp - before
+                ally._healing_done += actual
+                debug(f"{self.name} heals {ally.name} for {actual} HP ({actual / 1e6:.1f}M) via passive")
+                ally_heals.append(f"{ally.name} +{self.format_damage_log(actual)}")
+
         if ally_heals:
             logs.append("💖 Passive healing: " + "; ".join(ally_heals))
         return logs

@@ -98,18 +98,14 @@ class Boss:
         self.total_damage_taken += effective_dmg
         logs.append(stylize_log("damage", f"Boss takes {int(effective_dmg / 1e6):.0f}M damage."))
 
-        # ✅ Patch: only enqueue attacker if it's the first hit of a skill
         if source_hero and source_hero.is_alive() and getattr(source_hero, '_using_real_attack', False):
-            print(f"[COUNTER] Queuing counterattack from {source_hero.name}")
-
             if not hasattr(self, "_counterattack_sources"):
                 self._counterattack_sources = set()
+
             if source_hero not in self._counterattack_sources:
                 self._counterattack_sources.add(source_hero)
-                print(f"[DEBUG] ✅ Counterattack queued for {source_hero.name}")
-                self._pending_counterattack_needed = True
-            else:
-                print(f"[DEBUG] 🔁 {source_hero.name} already queued for counterattack.")
+                logs += self.flush_counterattacks(team.heroes)
+
         else:
             print(f"[DEBUG] ❌ Counterattack NOT triggered.")
 
@@ -309,6 +305,21 @@ class Boss:
         for hero in heroes:
             if not hero.is_alive():
                 continue
+
+                        # ✅ Dodge check
+            mystical_chance = 0.15 if "mystical_veil" in hero.buffs else 0
+            dodge_chance = mystical_chance + getattr(hero, "dodge", 0) / 100
+            dodge_chance = min(dodge_chance, 1.0)
+
+            if random.random() < dodge_chance:
+                logs.append(f"🌀 {hero.name} dodges the boss {'active skill' if 'active_skill' in __name__ else 'basic attack'}!")
+                if mystical_chance > 0:
+                    veil = hero.buffs["mystical_veil"]
+                    veil["layers"] -= 1
+                    if veil["layers"] <= 0:
+                        del hero.buffs["mystical_veil"]
+                continue
+
             total_damage = 0
             for _ in range(3):
                 total_damage += self.boss_deal_damage_to_hero(hero, int(self.atk * 30))
@@ -346,6 +357,21 @@ class Boss:
         for hero in heroes:
             if not hero.is_alive():
                 continue
+
+                        # ✅ Dodge check
+            mystical_chance = 0.15 if "mystical_veil" in hero.buffs else 0
+            dodge_chance = mystical_chance + getattr(hero, "dodge", 0) / 100
+            dodge_chance = min(dodge_chance, 1.0)
+
+            if random.random() < dodge_chance:
+                logs.append(f"🌀 {hero.name} dodges the boss {'active skill' if 'active_skill' in __name__ else 'basic attack'}!")
+                if mystical_chance > 0:
+                    veil = hero.buffs["mystical_veil"]
+                    veil["layers"] -= 1
+                    if veil["layers"] <= 0:
+                        del hero.buffs["mystical_veil"]
+                continue
+
             total_damage = 0
             for _ in range(3):
                 total_damage += self.boss_deal_damage_to_hero(hero, int(self.atk * 20))

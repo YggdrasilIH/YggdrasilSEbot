@@ -30,7 +30,7 @@ def run_debugfast_terminal():
     data = [
         ("hero_MFF_Hero", 1.1e10, 6e7, 3800, "CP", "UW", dDB(), 15, 0, 0, 0, 0, 0, 0, 59, 40, 8000),
         ("hero_SQH_Hero", 1.2e10, 7e7, 3670, "CP", "UW", dMirror(), 15, 0, 0, 0, 0, 0, 0, 59, 40, 9000),
-        ("hero_LFA_Hero", 2e10, 1.75e8, 3540, "CP", "BS", Antlers(), 15, 70, 150, 150, 600, 150, 150, 0, 16, 8999),
+        ("hero_LFA_Hero", 2e10, 1.75e8, 3540, "MP", "BS", Antlers(), 15, 70, 150, 150, 600, 150, 150, 0, 16, 8999),
         ("hero_PDE_Hero", 0.9e10, 6e7, 2300, "CP", "UW", Scissors(), 15, 0, 0, 0, 0, 0, 0, 59, 40, 8444),
         ("hero_LBRM_Hero", 0.9e10, 5e7, 2000, "CP", "UW", Scissors(), 14, 0, 0, 0, 0, 0, 0, 59, 46, 8000),
         ("hero_DGN_Hero", 1.4e10, 9e7, 3300, "CP", "UW", Scissors(), 15, 0, 0, 0, 0, 0, 0, 59, 16, 7999)

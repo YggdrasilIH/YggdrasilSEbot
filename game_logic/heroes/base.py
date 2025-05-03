@@ -29,6 +29,7 @@ class Hero:
         self.original_armor = armor
         self.spd = spd
         self.skill_damage = 0
+        self.dodge = 0
         self.crit_rate = crit_rate
         self.crit_dmg = crit_dmg
         self.ctrl_immunity = ctrl_immunity  # ✅ Correct here
@@ -52,6 +53,8 @@ class Hero:
         self.regen_buff = None
         self.poison_effects = []
         self.shield = 0
+        self._healing_done = 0
+        self._healing_rounds = []
         self.DR = 35
         self.ADR = 8
         self.atk_reduction = 0
@@ -72,6 +75,7 @@ class Hero:
         self._base_ctrl_immunity = self.ctrl_immunity
         self._base_dr = self.DR
         self._base_adr = self.ADR
+        self._base_dodge = 0
         self._base_all_damage_dealt = self.all_damage_dealt
         self._base_spd = self.spd
         self._base_skill_damage = getattr(self, "skill_damage", 0)
@@ -108,6 +112,7 @@ class Hero:
         self.crit_rate = self._base_crit_rate
         self.crit_dmg = self._base_crit_dmg
         self.armor_break = self._base_armor_break
+        self.dodge = self._base_dodge  # Reset first
 
         # Apply active buffs
         for buff in self.buffs.values():
@@ -146,6 +151,9 @@ class Hero:
                     self.ADR += val
                 elif attr == "energy":
                     self.energy += val
+                elif attr == "dodge":
+                    self.dodge += val
+
 
         # Hardcaps
         if self.precision > 150:
@@ -226,6 +234,18 @@ class Hero:
         energy_bonus = max(0, self.energy - 100)
         return base_percent + (self.skill_damage / 100) + (energy_bonus / 100)
 
+    def process_regen_buffs(self):
+        logs = []
+        for name, buff in self.buffs.items():
+            if "heal_amount" in buff and buff.get("rounds", 0) > 0:
+                heal = buff["heal_amount"]
+                before = self.hp
+                self.hp = min(self.max_hp, self.hp + heal)
+                actual = self.hp - before
+                self._healing_done += actual
+                logs.append(f"🩹 {self.name} heals {actual // 1_000_000}M via {name}.")
+        return logs
+
 
     def end_of_round(self, boss, team, round_num):
         self.decrement_control_effects()
@@ -259,6 +279,8 @@ class Hero:
             artifact_logs = self.artifact.apply_end_of_round(self, team, boss, round_num)
             if artifact_logs:
                 messages.extend(artifact_logs)
+        messages.extend(self.process_regen_buffs())
+
 
         messages.append(f"📉 {self.get_status_description()}")
         return messages

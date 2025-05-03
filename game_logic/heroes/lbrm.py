@@ -217,9 +217,9 @@ class LBRM(Hero):
     def passive_trigger(self, ally, boss, team):
         logs = []
 
-        print(f"[DEBUG-LBRM-PASSIVE] Attempting cleanse for {ally.name} → Seal={self.has_seal_of_light}, Limit={self.ctrl_removal_limit}, Energy={self.energy}")
+        print(f"[DEBUG-LBRM-PASSIVE] Attempting cleanse for {ally.name} → Seal={self.has_seal_of_light}, Energy={self.energy}")
 
-        if self.has_seal_of_light or self.ctrl_removal_limit <= 0:
+        if self.has_seal_of_light:
             return logs
 
         if any([ally.has_silence, ally.has_fear, ally.has_seal_of_light]) and self.energy >= 30:
@@ -228,8 +228,6 @@ class LBRM(Hero):
                 chosen = random.choice(effects)
                 logs.append(clear_control_effect(ally, chosen))
                 logs.append(f"🪽 {self.name} removes {chosen.replace('_', ' ').title()} from {ally.name} (Wings). +1 Power of Dream, shield granted.")
-                self.ctrl_removal_used = True
-                self.ctrl_removal_limit -= 1
                 self.power_of_dream += 1
                 shield_value = int(self.atk * 15)
                 actual = ally.add_shield(shield_value)
