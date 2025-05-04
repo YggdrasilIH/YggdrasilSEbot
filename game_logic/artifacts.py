@@ -2,20 +2,7 @@
 import random
 from game_logic.buff_handler import BuffHandler
 from utils.log_utils import group_team_buffs
-from game_logic.damage_utils import apply_flat_reduction
-
-def stylize_log(category, message):
-    icons = {
-        "energy": "🔶",
-        "buff": "🔷",
-        "debuff": "🔻",
-        "damage": "🟢",
-        "heal": "🟣",
-        "control": "🔵",
-        "info": "📘"
-    }
-    icon = icons.get(category, "📘")
-    return f"{icon} {message}"
+from utils.log_utils import stylize_log
 
 class Artifact:
     def apply_start_of_battle(self, team, round_num):
@@ -42,7 +29,6 @@ class Scissors(Artifact):
             bonus = buff.get("bonus", 0)
             duration = buff.get("rounds", 1)
 
-            # Only replicate positive ATK or HD buffs
             if attr not in {"atk", "hd"} or bonus <= 0:
                 continue
 
@@ -57,10 +43,9 @@ class Scissors(Artifact):
                     "rounds": duration
                 }
                 if isinstance(bonus, float) and abs(bonus) < 1.0:
-                    buff_data["is_percent"] = True  # Preserve percent flag for Specter, inversion, etc.
+                    buff_data["is_percent"] = True
 
-                target.apply_buff(f"scissors_repl_{buff_name}_{round_num}", buff_data)
-
+                BuffHandler.apply_buff(target, f"scissors_repl_{buff_name}_{round_num}", buff_data, boss)
                 replicated_msgs.append(
                     stylize_log("buff", f"{target.name} replicates +{scaled_bonus:.3f} {attr.upper()} from {buff_name} (Scissors).")
                 )
@@ -68,12 +53,13 @@ class Scissors(Artifact):
         return replicated_msgs
 
 
-
 class DB(Artifact):
     def apply_start_of_battle(self, team, round_num):
         logs = []
         if hasattr(self, "owner") and self.owner and not self.owner.has_seal_of_light:
-            self.owner.energy += 50
+            BuffHandler.apply_buff(self.owner, f"db_start_energy_{round_num}", {
+                "attribute": "energy", "bonus": 50, "rounds": 0
+            }, boss=None)
             logs.append(f"⚡ {self.owner.name} gains +50 starting Energy from DB.")
         return logs
 
@@ -81,35 +67,25 @@ class DB(Artifact):
         logs = []
         buffs_applied = []
 
-              # First: Check if the artifact owner (wearer) is sealed
         if hasattr(self, "owner") and self.owner and self.owner.has_seal_of_light:
             logs.append(f"❌ {self.owner.name}'s DB is sealed by Seal of Light.")
-            return logs  # Artifact effect cancelled entirely
-        
+            return logs
+
         if hasattr(team, "heroes"):
             for hero in team.heroes:
-                if hero.curse_of_decay > 0:
-                    hero.curse_of_decay -= 1
-                    damage = apply_flat_reduction(hero, boss.atk * 30)
-                    if hasattr(hero, "take_damage"):
-                        cod_logs = hero.take_damage(damage, source_hero=boss, team=team)
-                        cod_logs = cod_logs if isinstance(cod_logs, list) else [cod_logs]
-                    else:
-                        hero.hp -= damage
-                        cod_logs = [f"{hero.name} takes {damage / 1e6:.0f}M damage."]
-                    if hero.hp < 0:
-                        hero.hp = 0
-                    logs.append(f"💀 Curse of Decay offsets energy buff on {hero.name}. Takes {int(damage):,} damage. (1 layer removed)")
-                else:
-                    hero.energy += 20
-                    buffs_applied.append((hero.name, "+20 Energy (DB)"))
-                    if random.random() < 0.5:
-                        hero.energy += 10
-                        buffs_applied.append((hero.name, "+10 Bonus Energy (DB)"))
+                energy_buff = {"attribute": "energy", "bonus": 20, "rounds": 0}
+                BuffHandler.apply_buff(hero, f"db_energy_{random.randint(1000,9999)}", energy_buff, boss)
+                buffs_applied.append((hero.name, "+20 Energy (DB)"))
+                if random.random() < 0.5:
+                    BuffHandler.apply_buff(hero, f"db_bonus_energy_{random.randint(1000,9999)}", {
+                        "attribute": "energy", "bonus": 10, "rounds": 0
+                    }, boss)
+                    buffs_applied.append((hero.name, "+10 Bonus Energy (DB)"))
 
         if buffs_applied:
             logs.extend(group_team_buffs(buffs_applied))
         return logs
+
 
 class dDB(DB):
     def apply_start_of_battle(self, team, round_num):
@@ -119,48 +95,49 @@ class dDB(DB):
             for hero in team.heroes:
                 if hero.has_seal_of_light:
                     continue
-                hero.energy += 100
+                BuffHandler.apply_buff(hero, f"ddb_start_energy_{random.randint(1000,9999)}", {
+                    "attribute": "energy", "bonus": 100, "rounds": 0
+                }, boss=None)
                 buffs_applied.append((hero.name, "+100 Starting Energy (dDB)"))
         if buffs_applied:
             logs.extend(group_team_buffs(buffs_applied))
         return logs
 
     def on_active_skill(self, team, boss):
-        logs = super().on_active_skill(team, boss)  # Keep all DB effects
-
+        logs = super().on_active_skill(team, boss)
         buffs_applied = []
 
-              # First: Check if the artifact owner (wearer) is sealed
         if hasattr(self, "owner") and self.owner and self.owner.has_seal_of_light:
             logs.append(f"❌ {self.owner.name}'s DB is sealed by Seal of Light.")
-            return logs  # Artifact effect cancelled entirely
-        
+            return logs
+
         if hasattr(team, "heroes"):
             for hero in team.heroes:
-
                 if hero.energy >= 100:
-                    hero.apply_buff(f"ddb_speed_boost_{random.randint(1000,9999)}", {
+                    BuffHandler.apply_buff(hero, f"ddb_speed_boost_{random.randint(1000,9999)}", {
                         "attribute": "speed",
                         "bonus": 3,
                         "rounds": 4
-                    })
+                    }, boss)
                     buffs_applied.append((hero.name, "+3 SPD (dDB Boost)"))
 
         if buffs_applied:
             logs.extend(group_team_buffs(buffs_applied))
         return logs
-    
+
 
 class Mirror(Artifact):
     def __init__(self):
         self.last_trigger_round = -3
         self.bonus = 4.5
-        self.ctrl_bonus = 3  # Add control immunity buff tracking
+        self.ctrl_bonus = 3
 
     def apply_start_of_battle(self, team, round_num):
         logs = []
         if hasattr(self, "owner") and self.owner and not self.owner.has_seal_of_light:
-            self.owner.energy += 50
+            BuffHandler.apply_buff(self.owner, f"mirror_start_energy_{round_num}", {
+                "attribute": "energy", "bonus": 75, "rounds": 0
+            }, boss=None)
             logs.append(f"⚡ {self.owner.name} gains +75 starting Energy from Mirror.")
         return logs
 
@@ -168,30 +145,21 @@ class Mirror(Artifact):
         msgs = []
         buffs_applied = []
 
-      # First: Check if the artifact owner (wearer) is sealed
         if hasattr(self, "owner") and self.owner and self.owner.has_seal_of_light:
             msgs.append(f"❌ {self.owner.name}'s DB is sealed by Seal of Light.")
-            return msgs # Artifact effect cancelled entirely
-        
-        if hero.curse_of_decay > 0:
-            hero.curse_of_decay -= 1
-            damage = apply_flat_reduction(hero, boss.atk * 30)
-            if hasattr(hero, "take_damage"):
-                hero.take_damage(damage, source_hero=boss, team=team)
-            else:
-                hero.hp -= damage
+            return msgs
 
-            if hero.hp < 0:
-                hero.hp = 0
-            msgs.append(f"💀 Curse of Decay offsets energy buff on {hero.name}. Takes {int(damage):,} damage. (1 layer removed)")
-        else:
-            hero.energy += 15
-            buffs_applied.append((hero.name, "+15 Energy (Mirror)"))
+        BuffHandler.apply_buff(hero, f"mirror_energy_{round_num}", {
+            "attribute": "energy",
+            "bonus": 15,
+            "rounds": 0
+        }, boss)
+        buffs_applied.append((hero.name, "+15 Energy (Mirror)"))
 
         if round_num - self.last_trigger_round >= 3:
             self.last_trigger_round = round_num
             self.bonus = 4.5
-            self.ctrl_bonus = 3  # Reset Control Immunity bonus
+            self.ctrl_bonus = 3
 
             for h in team.heroes:
                 BuffHandler.apply_buff(h, f"mirror_damage_bonus_{round_num}", {
@@ -207,11 +175,10 @@ class Mirror(Artifact):
                     "rounds": 3
                 }, boss)
                 buffs_applied.append((h.name, f"+{self.ctrl_bonus}% Ctrl Immunity (Mirror)"))
-
         else:
             self.bonus -= 1.5
             if self.ctrl_bonus > 0:
-                self.ctrl_bonus -= 1  # Decrease Control Immunity bonus each round
+                self.ctrl_bonus -= 1
 
         if buffs_applied:
             msgs.extend(group_team_buffs(buffs_applied))
@@ -224,13 +191,15 @@ class dMirror(Mirror):
         super().__init__()
         self.last_trigger_round = -3
         self.bonus = 4.5
-        self.dr_bonus = 3  # Start with +3% DR
-        self.ctrl_bonus = 3  # Start with +3% Ctrl Immunity
+        self.dr_bonus = 3
+        self.ctrl_bonus = 3
 
     def apply_start_of_battle(self, team, round_num):
         logs = []
         if hasattr(self, "owner") and self.owner and not self.owner.has_seal_of_light:
-            self.owner.energy += 100
+            BuffHandler.apply_buff(self.owner, f"dmirror_start_energy_{round_num}", {
+                "attribute": "energy", "bonus": 100, "rounds": 0
+            }, boss=None)
             logs.append(f"⚡ {self.owner.name} gains +100 starting Energy from dMirror.")
         return logs
 
@@ -238,34 +207,21 @@ class dMirror(Mirror):
         msgs = []
         buffs_applied = []
 
-      # First: Check if the artifact owner (wearer) is sealed
         if hasattr(self, "owner") and self.owner and self.owner.has_seal_of_light:
             msgs.append(f"❌ {self.owner.name}'s DB is sealed by Seal of Light.")
-            return msgs  # Artifact effect cancelled entirely
-        
-        # Regular energy bonus (+15 energy)
-        if hero.curse_of_decay > 0:
-            hero.curse_of_decay -= 1
-            damage = apply_flat_reduction(hero, boss.atk * 30)
-            if hasattr(hero, "take_damage"):
-                cod_logs = hero.take_damage(damage, source_hero=boss, team=team)
-                cod_logs = cod_logs if isinstance(cod_logs, list) else [cod_logs]
-            else:
-                hero.hp -= damage
-                cod_logs = [f"{hero.name} takes {damage / 1e6:.0f}M damage."]
-            if hero.hp < 0:
-                hero.hp = 0
-            msgs.append(f"💀 Curse of Decay offsets energy buff on {hero.name}. Takes {int(damage):,} damage. (1 layer removed)")
-        else:
-            hero.energy += 15
-            buffs_applied.append((hero.name, "+15 Energy (dMirror)"))
+            return msgs
 
-            # NEW: Heal 6% max HP
-            heal_amt = int(hero.max_hp * 0.06)
-            hero.hp = min(hero.max_hp, hero.hp + heal_amt)
-            buffs_applied.append((hero.name, f"+{heal_amt // 1_000_000}M Heal (dMirror)"))
+        BuffHandler.apply_buff(hero, f"dmirror_energy_{round_num}", {
+            "attribute": "energy",
+            "bonus": 15,
+            "rounds": 0
+        }, boss)
+        buffs_applied.append((hero.name, "+15 Energy (dMirror)"))
 
-        # Every 3 rounds: reset ADD, DR, and Ctrl bonuses
+        heal_amt = int(hero.max_hp * 0.06)
+        hero.hp = min(hero.max_hp, hero.hp + heal_amt)
+        buffs_applied.append((hero.name, f"+{heal_amt // 1_000_000}M Heal (dMirror)"))
+
         if round_num - self.last_trigger_round >= 3:
             self.last_trigger_round = round_num
             self.bonus = 4.5
@@ -273,7 +229,6 @@ class dMirror(Mirror):
             self.ctrl_bonus = 3
 
             for h in team.heroes:
-                # Apply +4.5% All Damage Dealt
                 BuffHandler.apply_buff(h, f"dmirror_damage_bonus_{round_num}", {
                     "attribute": "all_damage_dealt",
                     "bonus": self.bonus,
@@ -281,7 +236,6 @@ class dMirror(Mirror):
                 }, boss)
                 buffs_applied.append((h.name, f"+{self.bonus:.1f}% All Damage (dMirror)"))
 
-                # Apply +3% DR
                 BuffHandler.apply_buff(h, f"dmirror_dr_bonus_{round_num}", {
                     "attribute": "DR",
                     "bonus": self.dr_bonus,
@@ -289,14 +243,12 @@ class dMirror(Mirror):
                 }, boss)
                 buffs_applied.append((h.name, f"+{self.dr_bonus}% DR (dMirror)"))
 
-                # Apply +3% Control Immunity
                 BuffHandler.apply_buff(h, f"dmirror_ctrl_bonus_{round_num}", {
                     "attribute": "ctrl_immunity",
                     "bonus": self.ctrl_bonus,
                     "rounds": 3
                 }, boss)
                 buffs_applied.append((h.name, f"+{self.ctrl_bonus}% Ctrl Immunity (dMirror)"))
-
         else:
             self.bonus -= 1.5
             if self.dr_bonus > 0:
@@ -309,15 +261,12 @@ class dMirror(Mirror):
 
         return msgs
 
-# game_logic/artifacts.py
-
-# game_logic/artifacts.py
 
 class Antlers(Artifact):
     def apply_end_of_round(self, hero, team, boss, round_num):
-
         if hasattr(self, "owner") and self.owner and self.owner.has_seal_of_light:
             return [stylize_log("info", f"{self.owner.name}'s Mirror is sealed by Seal of Light.")]
+
         if not hasattr(hero, "antler_stacks"):
             hero.antler_stacks = 0
         hero.antler_stacks += 1
@@ -325,13 +274,11 @@ class Antlers(Artifact):
         bonus = 9
         buff_name = f"antlers_round_{hero.antler_stacks}"
 
-        hero.apply_buff(buff_name, {
+        BuffHandler.apply_buff(hero, buff_name, {
             "attribute": "all_damage_dealt",
             "bonus": bonus,
             "rounds": 9999,
-            "skill_buff": True  # ✅ Now protected from Curse of Decay
-        })
-
-        hero.all_damage_dealt += bonus  # Still increment numerical stat directly too
+            "skill_buff": True
+        }, boss)
 
         return [stylize_log("buff", f"{hero.name} gains +9% all damage from Antlers (Total {hero.antler_stacks * 9}%).")]

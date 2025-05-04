@@ -1,3 +1,7 @@
+import re
+import sys
+import os
+from contextlib import contextmanager
 from game_logic import Hero, Boss, Team
 from game_logic.artifacts import Scissors, DB, Mirror, Antlers, dDB, dMirror
 from game_logic.cores import PDECore
@@ -5,10 +9,6 @@ from game_logic.pets import Phoenix
 from game_logic.lifestar import Specter, Nova
 from game_logic.enables import ControlPurify, AttributeReductionPurify, MarkPurify, BalancedStrike, UnbendingWill
 from utils.battle import chunk_logs
-import re, sys, os
-from contextlib import contextmanager
-
-DEBUG_BUFFS = False  # Toggle buff logging on/off
 
 @contextmanager
 def suppress_stdout():
@@ -20,12 +20,15 @@ def suppress_stdout():
         sys.stdout.close()
         sys.stdout = original_stdout
 
-purify_mapping = {"CP": ControlPurify(), "ARP": AttributeReductionPurify(), "MP": MarkPurify()}
-trait_mapping = {"BS": BalancedStrike(), "UW": UnbendingWill()}
+# Final filter pattern
+filter_re = re.compile("⚡|🔪|🗡️|⏱️\\ Boss\\ counterattacks|😱|🔇|💡|🧼|DMG\\ \\(B\\)|Boss\\ Buffs\\ Per\\ Round:|💥\\ Boss\\ active\\ hits|🗯️\\ Boss\\ basic\\ hits|💚|🛡️|💀")
 
-def run_debugfast_terminal():
+def run_debugfast_filtered():
     global active_core
     active_core = PDECore()
+
+    purify_mapping = {"CP": ControlPurify(), "ARP": AttributeReductionPurify(), "MP": MarkPurify()}
+    trait_mapping = {"BS": BalancedStrike(), "UW": UnbendingWill()}
 
     data = [
         ("hero_MFF_Hero", 1.1e10, 6e7, 3800, "CP", "UW", dDB(), 15, 0, 0, 0, 0, 0, 0, 59, 40, 8000),
@@ -54,8 +57,6 @@ def run_debugfast_terminal():
         h.gk = h.defier = True
         h.total_damage_dealt = 0
         h._damage_rounds = []
-        h.recalculate_stats()
-
         heroes.append(h)
 
     team = Team(heroes, heroes[:2], heroes[2:], pet=Phoenix())
@@ -75,29 +76,20 @@ def run_debugfast_terminal():
             if hero.lifestar and hasattr(hero.lifestar, "start_of_round"):
                 hero.lifestar.start_of_round(hero, team, boss, round_num)
 
-        if DEBUG_BUFFS:
-            for h in team.heroes:
-                print(f"[DEBUG] {h.name} ATK: {h.atk:,} | ADD: {h.all_damage_dealt:.1f}% | HD: {h.hd}")
-                for name, buff in h.buffs.items():
-                    print(f"[DEBUG] {h.name} buff {name}: {buff}")
-
         hero_start_dmg = {h.name: h.total_damage_dealt for h in team.heroes}
         with suppress_stdout():
-            team.perform_turn(boss, round_num)
-            team.end_of_round(boss, round_num)
-        hero_end_dmg = {h.name: h.total_damage_dealt for h in team.heroes}
+            logs = team.perform_turn(boss, round_num)
+            logs += team.end_of_round(boss, round_num)
 
-        if round_num == 1:
-            header = "         | " + " | ".join(f"{h.name:>8}" for h in team.heroes)
-            print("\n" + "-" * len(header))
-            print(header)
-            print("-" * len(header))
+        hero_end_dmg = {h.name: h.total_damage_dealt for h in team.heroes}
 
         print(f"\n🔁 Round {round_num}")
         print("DMG (B)  | " + " | ".join(f"{(hero_end_dmg[h.name] - hero_start_dmg[h.name]) / 1e9:8.2f}" for h in team.heroes))
-        print("Energy   | " + " | ".join(f"{h.energy:8}" for h in team.heroes))
-        print("Calamity | " + " | ".join(f"{h.calamity:8}" for h in team.heroes))
-        print("Curse    | " + " | ".join(f"{h.curse_of_decay:8}" for h in team.heroes))
+
+        for log in logs:
+            if isinstance(log, str) and filter_re.search(log):
+                print(log)
+
 
         boss_buff_tracking.append({
             "Round": round_num,
@@ -108,33 +100,10 @@ def run_debugfast_terminal():
             "ADR": boss.ADR
         })
 
-        for h in team.heroes:
-            status = "💀 DEAD" if not h.is_alive() else f"{h.hp/1e6:.0f}M HP"
-            print(f"{h.name}: {status}")
-
-    print("\n🏹 FINAL SUMMARY")
-    total_team = sum(h.total_damage_dealt for h in team.heroes)
-    for h in team.heroes:
-        total = h.total_damage_dealt
-        percent = (total / total_team * 100) if total_team else 0
-        label = f"{h.name:>8}"
-        if total >= 1e13:
-            dmg_str = f"{total:.2e}"
-        else:
-            dmg_str = f"{total / 1e9:6.2f}B"
-        print(f"{label}: {dmg_str} DMG ({percent:5.1f}%)")
-
     print("\n📈 Boss Buffs Per Round:")
     print("Round |   ATK   |   HD   |  ADD  |  DR  | ADR")
     for b in boss_buff_tracking:
         print(f"{b['Round']:5} | {b['ATK']:7} | {b['HD']:6} | {b['ADD']:5} | {b['DR']*100:4.0f}% | {b['ADR']*100:4.0f}%")
 
-    if not boss.is_alive():
-        print("\n🏆 Boss defeated!")
-    elif all(not h.is_alive() for h in team.heroes):
-        print("\n❌ All heroes have fallen!")
-    else:
-        print("\n⏳ Battle ended after 15 rounds (Boss survived).")
-
 if __name__ == "__main__":
-    run_debugfast_terminal()
+    run_debugfast_filtered()

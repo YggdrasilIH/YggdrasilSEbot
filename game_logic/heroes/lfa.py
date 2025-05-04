@@ -23,7 +23,6 @@ class LFA(Hero):
 
     def active_skill(self, boss, team):
         logs = []
-        
 
         if self.has_silence:
             logs.append(f"{self.name} is silenced and cannot use active skill.")
@@ -78,12 +77,11 @@ class LFA(Hero):
             self.trait_enable.override_crit_check(crit_failed)
 
         # Step 7: Buffs and debuffs
-        steal_amount = int(boss.base_atk * 0.30)
-        logs.extend(BuffHandler.apply_debuff(boss, "lfa_atk_down_active", {
+        unique_name = f"lfa_atk_down_active_{random.randint(0, 999999)}"
+        logs.extend(BuffHandler.apply_debuff(boss, unique_name, {
             "attribute": "atk", "bonus": -0.30, "rounds": 9999
         }))
-        logs.append(f"🔻 {boss.name}'s ATK reduced by 30% permanently from LFA's active skill.")
-
+        steal_amount = int(boss.base_atk * 0.30)
         logs.extend(BuffHandler.apply_buff(self, "lfa_atk_steal_buff", {
             "attribute": "atk", "bonus": steal_amount, "rounds": 9999
         }, boss))
@@ -97,6 +95,7 @@ class LFA(Hero):
             logs.extend(self.release_transition_skill(boss, team))
 
         return logs
+
 
     def basic_attack(self, boss, team):
         if self.has_fear:
@@ -115,9 +114,13 @@ class LFA(Hero):
                 allow_counter=True, allow_crit=True
             ))
 
-            # ✅ Buff application (no counter)
-            logs.extend(self.apply_attribute_buff_with_curse("crit_rate", 24, boss))
 
+
+            _, msg = BuffHandler.apply_buff(self, "crit_rate_boost", {
+                "attribute": "crit_rate", "bonus": 24, "rounds": 3
+            }, boss=boss)
+            if msg:
+                logs.append(msg)
             return logs
 
         return self.with_basic_flag(do_attack)

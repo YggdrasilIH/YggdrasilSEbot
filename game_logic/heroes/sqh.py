@@ -29,14 +29,25 @@ class SQH(Hero):
                 ally.queens_guard = True
                 buffs_applied.append((ally.name, "+24% All Damage Dealt"))
                 buffs_applied.append((ally.name, "+8% ADR"))
-                ally.apply_attribute_buff_with_curse("all_damage_dealt", 24, boss)
-                ally.apply_attribute_buff_with_curse("ADR", 8, boss)
+
+                _, msg1 = BuffHandler.apply_buff(ally, "queens_guard_add", {
+                    "attribute": "all_damage_dealt", "bonus": 24, "rounds": 9999
+                }, boss=boss)
+                if msg1:
+                    logs.append(msg1)
+
+                _, msg2 = BuffHandler.apply_buff(ally, "queens_guard_adr", {
+                    "attribute": "ADR", "bonus": 8, "rounds": 9999
+                }, boss=boss)
+                if msg2:
+                    logs.append(msg2)
 
         if buffs_applied:
             logs.append("✨ Queen's Guard Buffs:")
             logs.extend(group_team_buffs(buffs_applied))
 
         return logs
+
 
 
     def active_skill(self, boss, team):
@@ -87,7 +98,6 @@ class SQH(Hero):
 
         return logs
 
-
     def basic_attack(self, boss, team):
         if self.has_fear:
             return [f"{self.name} is feared and cannot use basic attack."]
@@ -112,9 +122,18 @@ class SQH(Hero):
             }))
             buff_logs.append("-25% Crit Rate")
 
-            # ❌ Self buffs — no counter
-            buff_logs.extend(self.apply_attribute_buff_with_curse("crit_rate", 18, boss))
-            buff_logs.extend(self.apply_attribute_buff_with_curse("crit_dmg", 18, boss))
+            # ❌ Self buffs — Curse-aware
+            _, msg1 = BuffHandler.apply_buff(self, "crit_rate_up_basic", {
+                "attribute": "crit_rate", "bonus": 18, "rounds": 6
+            }, boss=boss)
+            if msg1:
+                buff_logs.append(msg1)
+
+            _, msg2 = BuffHandler.apply_buff(self, "crit_dmg_up_basic", {
+                "attribute": "crit_dmg", "bonus": 18, "rounds": 6
+            }, boss=boss)
+            if msg2:
+                buff_logs.append(msg2)
 
             logs.append(f"🔪 {self.name} Basic Attack effects: {' | '.join(buff_logs)}.")
             return logs
@@ -123,103 +142,69 @@ class SQH(Hero):
 
 
     def release_transition_skill(self, team, boss):
-            if self.has_seal_of_light:
-                return []  # Transition Skill blocked by Seal of Light
-
-            logs = [f"🔄 {self.name} activates Transition Skill (TP -12 → {self.transition_power - 12})."]
-            self.transition_power -= 12
-
-            atk_buffs, heals, curse_penalties, energy_gain = [], [], [], []
-            buffs_applied = []
-
-            for ally in team.heroes:
-                if getattr(ally, "queens_guard", False):
-                    atk_buffs += ally.apply_attribute_buff_with_curse("atk", 10, boss)
-                    heal_amt = int(ally.max_hp * 0.50)
-                    before = ally.hp
-                    ally.hp = min(ally.max_hp, ally.hp + heal_amt)
-                    actual = ally.hp - before
-                    ally._healing_done += actual
-                    debug(f"{self.name} transition heals {ally.name} (Queen’s Guard) for {actual} HP ({actual / 1e6:.1f}M)")
-                    heals.append(f"{ally.name} +{self.format_damage_log(actual)} (+10% ATK)")
-
-
-            if atk_buffs:
-                logs.append("🛡️ Queen's Guard Buffs: " + " | ".join(atk_buffs))
-            if heals:
-                logs.append("❤️ Queen's Guard Healing: " + " | ".join(heals))
-
-            for ally in team.heroes:
-                buffs_applied.append((ally.name, "+10% All Damage Dealt"))
-                buffs_applied.append((ally.name, "+20% ADR"))
-                buffs_applied.append((ally.name, "+20% DR"))
-
-                ally.apply_attribute_buff_with_curse("all_damage_dealt", 10, boss)
-                ally.apply_attribute_buff_with_curse("ADR", 20, boss)
-                ally.apply_attribute_buff_with_curse("DR", 20, boss)
-
-                if ally != self:
-                    if ally.curse_of_decay > 0:
-                        damage = int(boss.atk * 30)
-                        ally.hp -= damage
-                        ally.curse_of_decay -= 1
-                        curse_penalties.append(f"{ally.name} takes {self.format_damage_log(damage)} (Curse)")
-                    else:
-                        ally.energy += 20
-                        energy_gain.append(ally.name)
-
-            if buffs_applied:
-                logs.append("✨ Team Buffs Applied:")
-                logs.extend(group_team_buffs(buffs_applied))
-
-            if curse_penalties:
-                logs.append("💀 Curse Penalties: " + " | ".join(curse_penalties))
-            if energy_gain:
-                logs.append(f"⚡ Energy +20: {', '.join(energy_gain)}")
-
-            logs.extend(BuffHandler.apply_debuff(boss, "atk_down", {"attribute": "atk", "bonus": -0.15, "rounds": 2}))
-            logs.append(f"🔻 Boss -15% ATK (2 rounds)")
-
-            heal_all = int(self.atk * 12)
-            for ally in team.heroes:
-                before = ally.hp
-                ally.hp = min(ally.max_hp, ally.hp + heal_all)
-                actual = ally.hp - before
-                ally._healing_done += actual
-                debug(f"{self.name} transition heals {ally.name} (team-wide) for {actual} HP ({actual / 1e6:.1f}M)")
-            logs.append(f"❤️ Team Heal: {self.format_damage_log(heal_all)} each (1200% ATK).")
-
-
-            return logs
-
-    def end_of_round(self, boss, team, round_num=None):
         if self.has_seal_of_light:
-            return super().end_of_round(boss, team, round_num)  # Passive healing blocked by Seal of Light
-        logs = super().end_of_round(boss, team, round_num)
-        heal_self = int(self.max_hp * 0.20)
-        before = self.hp
-        self.hp = min(self.max_hp, self.hp + heal_self)
-        actual = self.hp - before
-        self._healing_done += actual
-        debug(f"{self.name} passive self-heals: {actual} HP ({actual / 1e6:.1f}M)")
-        logs.append(f"💖 {self.name} heals self for {self.format_damage_log(actual)}.")
+            return []  # Transition Skill blocked by Seal of Light
 
+        logs = [f"🔄 {self.name} activates Transition Skill (TP -12 → {self.transition_power - 12})."]
+        self.transition_power -= 12
 
-        alive_count = sum(1 for h in team.heroes if h.is_alive())
-        ally_heals = []
+        atk_buffs, heals, buffs_applied = [], [], []
+
         for ally in team.heroes:
-            if ally != self and ally.is_alive():
-                heal_amt = int(ally.max_hp * 0.016 * alive_count)
+            if getattr(ally, "queens_guard", False):
+                _, msg = BuffHandler.apply_buff(ally, "atk_up_transition", {
+                    "attribute": "atk", "bonus": 10, "rounds": 3
+                }, boss=boss)
+                if msg:
+                    atk_buffs.append(msg)
+
+                heal_amt = int(ally.max_hp * 0.50)
                 before = ally.hp
                 ally.hp = min(ally.max_hp, ally.hp + heal_amt)
                 actual = ally.hp - before
                 ally._healing_done += actual
-                debug(f"{self.name} heals {ally.name} for {actual} HP ({actual / 1e6:.1f}M) via passive")
-                ally_heals.append(f"{ally.name} +{self.format_damage_log(actual)}")
+                heals.append(f"{ally.name} +{self.format_damage_log(actual)} (+10% ATK)")
 
-        if ally_heals:
-            logs.append("💖 Passive healing: " + "; ".join(ally_heals))
+        if atk_buffs:
+            logs.append("🛡️ Queen's Guard Buffs: " + " | ".join(atk_buffs))
+        if heals:
+            logs.append("❤️ Queen's Guard Healing: " + " | ".join(heals))
+
+        for ally in team.heroes:
+            for attr, val in [("all_damage_dealt", 10), ("ADR", 20), ("DR", 20)]:
+                _, msg = BuffHandler.apply_buff(ally, f"{attr}_transition", {
+                    "attribute": attr, "bonus": val, "rounds": 3
+                }, boss=boss)
+                if msg:
+                    logs.append(msg)
+                buffs_applied.append((ally.name, f"+{val}% {attr}"))
+
+            if ally != self:
+                _, msg = BuffHandler.apply_buff(ally, f"transition_energy_{random.randint(1000,9999)}", {
+                    "attribute": "energy", "bonus": 20, "rounds": 0
+                }, boss=boss)
+                if msg:
+                    logs.append(msg)
+
+        if buffs_applied:
+            logs.append("✨ Team Buffs Applied:")
+            logs.extend(group_team_buffs(buffs_applied))
+
+        logs.extend(BuffHandler.apply_debuff(boss, "atk_down", {
+            "attribute": "atk", "bonus": -0.15, "rounds": 2
+        }))
+        logs.append("🔻 Boss -15% ATK (2 rounds)")
+
+        heal_all = int(self.atk * 12)
+        for ally in team.heroes:
+            before = ally.hp
+            ally.hp = min(ally.max_hp, ally.hp + heal_all)
+            actual = ally.hp - before
+            ally._healing_done += actual
+        logs.append(f"❤️ Team Heal: {self.format_damage_log(heal_all)} each (1200% ATK).")
+
         return logs
+
 
     def take_damage(self, damage, source_hero=None, team=None):
         logs = []

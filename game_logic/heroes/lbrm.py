@@ -62,16 +62,25 @@ class LBRM(Hero):
         self.ctrl_removal_limit = 1
         self.ctrl_removal_used = False
         logs = [f"✨ {self.name} activates Mirror Magic (Wings, Magnification, Protection)."]
-        logs.extend(self.apply_attribute_buff_with_curse("control_immunity", 8, boss))
-        logs.extend(self.apply_attribute_buff_with_curse("spd", 8, boss))
-        logs.extend(self.apply_attribute_buff_with_curse("all_damage_dealt", 10, boss))
+
+        buffs_to_apply = [
+            ("wings_ctrl_immunity", {"attribute": "control_immunity", "bonus": 8, "rounds": 999}),
+            ("wings_speed", {"attribute": "spd", "bonus": 8, "rounds": 999}),
+            ("magnification_add", {"attribute": "all_damage_dealt", "bonus": 10, "rounds": 999}),
+            ("mirror_dr", {"attribute": "DR", "bonus": 6 * 3, "rounds": 999}),
+        ]
+
+        for name, data in buffs_to_apply:
+            success, msg = BuffHandler.apply_buff(self, name, data, boss=boss)
+            if msg:
+                logs.append(msg)
+
         actual = self.add_shield(int(self.atk * 28))
         logs.append(f"🛡️ {self.name} gains {actual // 1_000_000}M shield (capped).")
 
-        dr_bonus = 6 * 3
-        logs.extend(self.apply_attribute_buff_with_curse("DR", dr_bonus, boss))
         self.wings_effect = self.magnification_effect = self.protection_effect = True
         return logs
+
 
     def basic_attack(self, boss, team):
         
@@ -99,6 +108,7 @@ class LBRM(Hero):
     def active_skill(self, boss, team):
         if self.has_seal_of_light:
             return []
+
         debug(f"{self.name} starts ACTIVE SKILL")
 
         self.ctrl_removal_limit = min(2, self.ctrl_removal_limit + 1)
@@ -113,7 +123,7 @@ class LBRM(Hero):
         boss.apply_buff("ctrl_immunity_down", {"decrease": 15, "rounds": 3})
 
         buffs_applied = []
-
+        # Dream Magic Wings
         ally_wings = max(team.heroes, key=lambda h: h.spd)
         BuffHandler.apply_buff(ally_wings, "wings_buff", {"attribute": "spd", "bonus": 8, "rounds": 4})
         BuffHandler.apply_buff(ally_wings, "wings_ctrl", {"attribute": "control_immunity", "bonus": 8, "rounds": 4})
@@ -122,11 +132,13 @@ class LBRM(Hero):
         ally_wings.extra_ctrl_removals = min(getattr(ally_wings, "extra_ctrl_removals", 0) + 1, 2)
         ally_wings.wings_from_transition = False
 
+        # Dream Magic Magnification
         ally_mag = max(team.heroes, key=lambda h: h.atk)
         BuffHandler.apply_buff(ally_mag, "magnification_buff", {"attribute": "all_damage_dealt", "bonus": 10, "rounds": 4})
         buffs_applied.append((ally_mag.name, "+10% All Damage Dealt (Magnification)"))
         ally_mag.magnification_effect = True
 
+        # Dream Magic Protection
         ally_prot = min(team.heroes, key=lambda h: h.hp)
         shield_amt = int(ally_prot.atk * 28)
         ally_prot.apply_buff("protection_shield", {"attribute": "shield", "shield": shield_amt, "rounds": 4})
@@ -135,11 +147,17 @@ class LBRM(Hero):
 
         self.transition_power += 6
         logs.append(f"✨ Gains 6 TP → {self.transition_power}.")
+
         if buffs_applied:
             logs.append("✨ Active Skill Buffs:")
             logs.extend(group_team_buffs(buffs_applied))
 
+        # 🟡 NEW — trigger transition skill immediately if TP > 6
+        if self.transition_power > 6:
+            logs.extend(self.release_transition_skill(boss, team))
+
         return logs
+
 
     def release_transition_skill(self, boss, team):
         if self.has_seal_of_light:
@@ -210,8 +228,7 @@ class LBRM(Hero):
             return super().end_of_round(boss, team, round_num)
         self.ctrl_removal_used = False
         logs = super().end_of_round(boss, team, round_num)
-        if self.transition_power >= 6:
-            logs.extend(self.release_transition_skill(boss, team))
+
         return logs
 
     def passive_trigger(self, ally, boss, team):
@@ -220,6 +237,11 @@ class LBRM(Hero):
         print(f"[DEBUG-LBRM-PASSIVE] Attempting cleanse for {ally.name} → Seal={self.has_seal_of_light}, Energy={self.energy}")
 
         if self.has_seal_of_light:
+            return logs
+
+        # Skip if ally has Dream Magic Wings with control removal stacks available
+        if getattr(ally, "extra_ctrl_removals", 0) > 0:
+            print(f"[DEBUG-LBRM-PASSIVE] Skipping cleanse for {ally.name} — Wings stack available ({ally.extra_ctrl_removals})")
             return logs
 
         if any([ally.has_silence, ally.has_fear, ally.has_seal_of_light]) and self.energy >= 30:
@@ -234,4 +256,3 @@ class LBRM(Hero):
                 logs.append(f"🛡️ {ally.name} gains {actual // 1_000_000}M shield (capped).")
 
         return logs
-

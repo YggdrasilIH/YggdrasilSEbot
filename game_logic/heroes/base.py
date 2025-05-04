@@ -290,29 +290,7 @@ class Hero:
         current = getattr(self, effect.get("attribute", "atk"))
         setattr(self, effect.get("attribute", "atk"), current + buff_value)
 
-    def apply_attribute_buff_with_curse(self, attribute, buff_value, boss):
-        messages = []
-        alias_map = {
-        "control_immunity": "ctrl_immunity",
-        "crit_damage": "crit_dmg",
-        "crit_rate": "crit_rate",
-        "dr": "DR",
-        "adr": "ADR",
-        # Add others as needed
-        }
-        stat_attr = alias_map.get(attribute, attribute)
 
-        if BuffHandler.is_attribute_buff({"attribute": attribute, "bonus": buff_value}) and self.curse_of_decay > 0:
-            damage = int(boss.atk * 30)
-            self.hp -= damage
-            self.hp = max(self.hp, 0)
-            self.curse_of_decay -= 1
-            messages.append(f"❌ Curse of Decay offsets {attribute} buff on {self.name}! Takes {damage} damage. (1 layer removed)")
-        else:
-            current = getattr(self, stat_attr)
-            setattr(self, attribute, current + buff_value)
-            messages.append(f"✅ {self.name} gains +{buff_value} {attribute}. (No Curse interference)")
-        return messages
 
     def add_shield(self, amount):
         before = self.shield

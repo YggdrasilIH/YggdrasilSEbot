@@ -188,7 +188,8 @@ class Boss:
         damage *= (1 + effective_add)
 
         # ✅ Apply Holy Damage (also additive)
-        effective_holy = max(0, self.hd / 100)
+        effective_holy = max(0, self.hd * 0.007)
+
         damage *= (1 + effective_holy)
 
         # ✅ Apply Damage Output Debuff (from e.g., LBRM transition)
@@ -197,7 +198,7 @@ class Boss:
 
         # ✅ Armor Reduction
         armor = hero.armor
-        armor_reduction = min(armor / (100 * 20 + 180), 0.75)
+        armor_reduction = min(armor / (100 * 20 + 180), 0.90)
         damage *= (1 - armor_reduction)
 
         # ✅ DR (Damage Reduction)
