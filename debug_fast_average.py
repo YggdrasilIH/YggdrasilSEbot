@@ -3,6 +3,7 @@
 from game_logic import Hero, Boss, Team
 from game_logic.artifacts import Scissors, DB, Mirror, Antlers, dDB, dMirror
 from game_logic.cores import PDECore
+import game_logic.cores  # ✅ Import the module to set global core
 from game_logic.pets import Phoenix
 from game_logic.lifestar import Specter, Nova
 from game_logic.enables import ControlPurify, AttributeReductionPurify, MarkPurify, BalancedStrike, UnbendingWill
@@ -14,12 +15,17 @@ from contextlib import contextmanager
 @contextmanager
 def suppress_stdout():
     original_stdout = sys.stdout
+    original_stderr = sys.stderr
     sys.stdout = open(os.devnull, 'w')
+    sys.stderr = open(os.devnull, 'w')
     try:
         yield
     finally:
         sys.stdout.close()
+        sys.stderr.close()
         sys.stdout = original_stdout
+        sys.stderr = original_stderr
+
 
 purify_mapping = {
     "CP": ControlPurify(),
@@ -32,31 +38,30 @@ trait_mapping = {
 }
 
 def create_team_and_boss():
-    global active_core
-    active_core = PDECore()
+    # ✅ Properly set active_core inside the module used by apply_control_effect
+    game_logic.cores.active_core = PDECore()
 
     data = [
         ("hero_MFF_Hero", 11e12, 6e7, 3800, "CP", "UW", dDB(), 15, 0, 0, 0, 0, 0, 0, 59, 40, 8000),
         ("hero_SQH_Hero", 12e12, 7e7, 3670, "CP", "UW", dMirror(), 15, 0, 0, 0, 0, 0, 0, 59, 40, 9000),
-        ("hero_LFA_Hero", 20e12, 1.75e8, 3540, "CP", "BS", Antlers(), 15, 70, 150, 150, 600, 150, 150, 0, 16, 8999),
+        ("hero_LFA_Hero", 20e12, 2e8, 3540, "CP", "BS", Antlers(), 15, 50, 150, 150, 600, 150, 150, 0, 16, 8999),
         ("hero_PDE_Hero", 9e12, 6e7, 2300, "CP", "UW", Scissors(), 15, 0, 0, 0, 0, 0, 0, 59, 40, 8444),
         ("hero_LBRM_Hero", 9.9e12, 5e7, 2000, "CP", "UW", Scissors(), 14, 0, 0, 0, 0, 0, 0, 59, 46, 8000),
-        ("hero_DGN_Hero", 14e12, 9e7, 3300, "CP", "UW", Scissors(), 15, 0, 0, 0, 0, 0, 0, 59, 16, 7999)
+        ("hero_DGN_Hero", 14e12, 16e7, 3300, "CP", "UW", Scissors(), 15, 0, 0, 0, 0, 0, 0, 59, 16, 7999)
     ]
 
-    
     heroes = []
     for hid, hp, atk, spd, purify, trait, artifact, dt_level, crit_rate, crit_dmg, precision, hd, skill_damage, add, dr, adr, armor in data:
         lifestar = None
+        if hid == "hero_LBRM_Hero":
+            h.immune_control_effect = "seal_of_light"
+
         if hid == "hero_LFA_Hero":
             lifestar = Specter()
-        elif hid == "hero_SQH_Hero": 
+        elif hid == "hero_SQH_Hero":
             lifestar = Nova()
- 
-        h = Hero.from_stats(hid, [hp, atk, spd], artifact=artifact, lifestar=lifestar)
-    #    if hid == "hero_MFF_Hero":
-   #         h.immune_control_effect = "seal_of_light"
 
+        h = Hero.from_stats(hid, [hp, atk, spd], artifact=artifact, lifestar=lifestar)
         h.set_enables(purify_mapping.get(purify), trait_mapping.get(trait))
         h.dt_level = dt_level
 
@@ -83,9 +88,9 @@ def create_team_and_boss():
 
         h.gk = h.defier = True
         h.total_damage_dealt = 0
+        h.recalculate_stats()
         heroes.append(h)
 
-  
     team = Team(heroes, heroes[:2], heroes[2:], pet=Phoenix())
     boss = Boss()
 
@@ -95,6 +100,7 @@ def run_debugfast_average():
     num_simulations = 1000
     hero_totals = {}
     boss_totals = []
+    
 
     best_damage = -float('inf')
     worst_damage = float('inf')
@@ -156,10 +162,8 @@ def run_debugfast_average():
 
     print(f"\n🏆 Average Total Team Damage: {total_str}")
 
-    # 🏆 Output best and worst battle results
     print(f"\n⭐ Best Single Battle: {best_damage:.2e}")
     print(f"📉 Worst Single Battle: {worst_damage:.2e}")
-
 
 if __name__ == "__main__":
     run_debugfast_average()

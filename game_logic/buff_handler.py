@@ -75,19 +75,21 @@ class BuffHandler:
             else:
                 return False, f"💀 Curse of Decay offsets {attr} buff on {hero.name} (boss missing)."
 
+        # ✅ Stack if buff name already exists with same attribute
+        if buff_name in hero.buffs and not replace_existing:
+            existing = hero.buffs[buff_name]
+            if existing.get("attribute") == attr and isinstance(existing.get("bonus"), (int, float)):
+                existing["bonus"] += bonus
+                existing["rounds"] = max(existing.get("rounds", 0), buff_data.get("rounds", 0))
+                buff_data = existing
+            else:
+                # Fallback to unique name for different buff type
+                buff_name = BuffHandler._generate_unique_name(buff_name, hero.buffs)
+                hero.buffs[buff_name] = buff_data
+        else:
+            hero.buffs[buff_name] = buff_data
 
-        # Ensure unique buff name if stacking is allowed
-        if not replace_existing:
-            buff_name = BuffHandler._generate_unique_name(buff_name, hero.buffs)
-
-        hero.buffs[buff_name] = buff_data
-
-        # Special: shield hard cap
-        if attr == "shield":
-            amount = buff_data.get("shield", 0)
-            hero.shield = min(hero.shield + amount, hero.max_hp)
-
-        # Apply effect to stat
+        # ✅ Apply effect to stat
         try:
             if internal_attr == "all_damage_dealt":
                 hero.all_damage_dealt += bonus
@@ -119,12 +121,13 @@ class BuffHandler:
                 hero.ADR = getattr(hero, "ADR", 0) + bonus
             elif internal_attr == "energy":
                 hero.energy += bonus
+            elif internal_attr == "shield":
+                amount = buff_data.get("shield", 0)
+                hero.shield = min(hero.shield + amount, hero.max_hp)
         except AttributeError:
             pass
 
         return True, None
-
-
 
     @staticmethod
     def apply_debuff(target, debuff_name, debuff_data, boss=None):
