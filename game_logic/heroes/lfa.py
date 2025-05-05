@@ -55,8 +55,17 @@ class LFA(Hero):
         hit_list.append({"damage": burst_damage, "can_crit": True})
         logs.append(f"🔫 {self.name} unleashes {burst_damage // 1_000_000}M bonus burst damage.")
 
-        # Step 5: One combined damage call
-        logs += hero_deal_damage(self, boss, base_damage=0, is_active=True, team=team, hit_list=hit_list, allow_counter=True)
+        # Step 5: One combined damage call with +10% crit chance
+        logs += hero_deal_damage(
+            self,
+            boss,
+            base_damage=0,
+            is_active=True,
+            team=team,
+            hit_list=hit_list,
+            allow_counter=True,
+            crit_chance_bonus=10  # 👈 Add 10% crit chance to entire sequence
+        )
 
         # Step 6: Buffs and debuffs
         unique_name = f"lfa_atk_down_active_{random.randint(0, 999999)}"
@@ -77,6 +86,7 @@ class LFA(Hero):
             logs.extend(self.release_transition_skill(boss, team))
 
         return logs
+
 
     def basic_attack(self, boss, team):
         if self.has_fear:

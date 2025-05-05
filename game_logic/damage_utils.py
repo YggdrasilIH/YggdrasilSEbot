@@ -7,7 +7,8 @@ from collections import namedtuple
 
 Hit = namedtuple("Hit", ["damage", "can_crit"])
 
-def hero_deal_damage(source, target, base_damage, is_active, team, hits=1, allow_counter=True, allow_crit=True, hit_list=None):
+def hero_deal_damage(source, target, base_damage, is_active, team, hits=1, allow_counter=True, allow_crit=True, hit_list=None, crit_chance_bonus=0):
+
     logs = []
     if not target.is_alive():
         return logs
@@ -29,13 +30,14 @@ def hero_deal_damage(source, target, base_damage, is_active, team, hits=1, allow
     any_non_crit = False
     any_crit = False
 
-    if hit_list:
+    if hit_list is not None:
         for hit in hit_list:
             dmg = hit["damage"]
             can_crit = hit.get("can_crit", True)
             crit = False
             if can_crit and allow_crit:
-                crit = random.random() < (source.crit_rate / 100)
+                crit_chance = min(source.crit_rate + crit_chance_bonus, 100)
+                crit = random.random() < (crit_chance / 100)
                 dmg *= (1.5 + (crit_dmg / 100) * 2) if crit else 1.0
             else:
                 dmg *= 1.0
@@ -57,6 +59,7 @@ def hero_deal_damage(source, target, base_damage, is_active, team, hits=1, allow
                 any_non_crit = True
             if crit:
                 any_crit = True
+
 
     total_damage = sum(d for d, _ in all_hits)
 
@@ -93,6 +96,7 @@ def hero_deal_damage(source, target, base_damage, is_active, team, hits=1, allow
     phase2_multiplier = (1 + poison_bonus) * (1 + burn_bonus) * (1 + gk) * (1 + defier) * (1 + hp_bonus) * (1 + maim_bonus)
     total_damage *= phase2_multiplier
 
+
     if hasattr(source, "dt_level") and source.dt_level > 0:
         dt_bonus = 1 + (source.dt_level * 0.10)
         total_damage *= dt_bonus
@@ -104,6 +108,11 @@ def hero_deal_damage(source, target, base_damage, is_active, team, hits=1, allow
                     if isinstance(buff, dict) and buff.get("attribute") == "crit_damage_taken")
         if bonus:
             total_damage *= (1 + bonus / 100)
+
+    # Shrink multiplier (if target has Shrink applied)
+    if isinstance(target, Boss) and hasattr(target, "shrink_debuff") and target.shrink_debuff:
+        shrink = target.shrink_debuff
+        total_damage *= shrink.get("multiplier_received", 1.0)
 
     # Balanced Strike final damage boost (after all multipliers)
     if any_non_crit:

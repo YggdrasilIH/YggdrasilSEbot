@@ -43,11 +43,11 @@ def create_team_and_boss():
 
     data = [
         ("hero_MFF_Hero", 11e12, 6e7, 3800, "CP", "UW", dDB(), 15, 0, 0, 0, 0, 0, 0, 59, 40, 8000),
-        ("hero_SQH_Hero", 12e12, 7e7, 3670, "CP", "UW", dMirror(), 15, 0, 0, 0, 0, 0, 0, 59, 40, 9000),
-        ("hero_LFA_Hero", 20e12, 2e8, 3540, "MP", "BS", Antlers(), 15, 60, 150, 150, 600, 150, 150, 0, 16, 8999),
+        ("hero_SQH_Hero", 12e12, 7e7, 3540, "CP", "UW", dMirror(), 15, 0, 0, 0, 0, 0, 0, 59, 40, 9000),
+        ("hero_LFA_Hero", 20e12, 2e8, 3400, "MP", "BS", Antlers(), 15, 70, 150, 150, 600, 150, 150, 0, 16, 8999),
         ("hero_PDE_Hero", 9e12, 6e7, 2300, "CP", "UW", Scissors(), 15, 0, 0, 0, 0, 0, 0, 59, 40, 8444),
         ("hero_LBRM_Hero", 9.9e12, 5e7, 2000, "CP", "UW", Scissors(), 14, 0, 0, 0, 0, 0, 0, 59, 46, 8000),
-        ("hero_DGN_Hero", 14e12, 16e7, 3300, "CP", "UW", Scissors(), 15, 0, 0, 0, 0, 0, 0, 59, 16, 7999)
+        ("hero_ELY_Hero", 14e12, 16e7, 2500, "CP", "UW", dMirror(), 15, 0, 0, 0, 0, 0, 0, 59, 16, 7999)
     ]
 
     heroes = []
@@ -55,8 +55,8 @@ def create_team_and_boss():
         lifestar = None
         if hid == "hero_PDE_Hero":
             h.immune_control_effect = "seal_of_light"
-        if hid == "hero_LBRM_Hero":
-            h.immune_control_effect = "seal_of_light"
+   #     if hid == "hero_LBRM_Hero":
+    #        h.immune_control_effect = "seal_of_light"
         if hid == "hero_LFA_Hero":
             lifestar = Specter()
         elif hid == "hero_SQH_Hero":
@@ -92,13 +92,18 @@ def create_team_and_boss():
         h.recalculate_stats()
         heroes.append(h)
 
+
     team = Team(heroes, heroes[:2], heroes[2:], pet=Phoenix())
     boss = Boss()
+
+    for hero in heroes:
+        if hero.artifact and hasattr(hero.artifact, "apply_start_of_battle"):
+            hero.artifact.apply_start_of_battle(team, round_num=1)
 
     return team, boss, heroes
 
 def run_debugfast_average():
-    num_simulations = 1000
+    num_simulations = 100
     hero_totals = {}
     boss_totals = []
     

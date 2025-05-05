@@ -69,6 +69,11 @@ class Team:
         logs.append("⚡ All heroes gain +50 energy at start of round.")
 
         for hero in self.heroes:
+            if hero.artifact and hasattr(hero.artifact, "start_of_round"):
+                hero.artifact.start_of_round(hero, self, boss, round_num)
+
+
+        for hero in self.heroes:
             if round_num == 1:
                 BuffHandler.apply_buff(hero, "start_ADR", {"attribute": "ADR", "bonus": 50, "rounds": 9999})
                 BuffHandler.apply_buff(hero, "start_HD", {"attribute": "HD", "bonus": 10, "rounds": 9999})

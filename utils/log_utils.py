@@ -29,8 +29,6 @@ def group_team_buffs(buffs_applied):
 
     return logs
 
-#def debug(message: str):
- #   print(f"[DEBUG] {message}")
+def debug(message: str):
+    print(f"[DEBUG] {message}")
 
-def debug(message):
-    pass  # Comment out or remove the print to silence debug logs
