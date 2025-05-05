@@ -20,7 +20,7 @@ class LFA(Hero):
                 existing["bonus"] += buff_data.get("bonus", 0)
         else:
             hero.apply_buff(buff_name, buff_data)
-
+   
     def active_skill(self, boss, team):
         logs = []
 
@@ -28,55 +28,37 @@ class LFA(Hero):
             logs.append(f"{self.name} is silenced and cannot use active skill.")
             return logs
         debug(f"{self.name} starts ACTIVE skill")
-        crit_failed = False
-        hits = []
+
+        hit_list = []
 
         # Step 1: Add 2 base hits (can crit)
         for _ in range(2):
-            hits.append(("base", self.atk * self.skill_multiplier(12)))
+            hit_list.append({"damage": self.atk * self.skill_multiplier(12), "can_crit": True})
 
         # Step 2: If boss < 60% HP, add 2 more hits (can crit)
         if boss.hp < boss.max_hp * 0.60:
             for _ in range(2):
-                hits.append(("base", self.atk * self.skill_multiplier(12)))
+                hit_list.append({"damage": self.atk * self.skill_multiplier(12), "can_crit": True})
 
-            # Heal based on second set of hits
-            second_total = sum(h[1] for h in hits[2:])
+            # Heal based on those 2 hits
+            second_total = sum(hit["damage"] for hit in hit_list[2:])
             heal_amt = int(second_total * 1.20)
             self.hp = min(self.max_hp, self.hp + heal_amt)
             logs.append(f"❤️ {self.name} heals for {heal_amt // 1_000_000}M HP from extra attacks.")
 
         # Step 3: Final single hit (cannot crit)
-        hits.append(("final", self.atk * self.skill_multiplier(12)))
+        hit_list.append({"damage": self.atk * self.skill_multiplier(12), "can_crit": False})
 
-        # Step 4: Process each hit separately
-        for i, (hit_type, dmg) in enumerate(hits):
-            allow_crit = hit_type == "base"
-            allow_counter = i == 0  # First hit only
-            result_logs = hero_deal_damage(
-                self, boss, dmg, is_active=True, team=team,
-                allow_counter=allow_counter, allow_crit=allow_crit
-            )
-            logs.extend(result_logs)
-
-            # Track crit_failed if base hit missed
-            if allow_crit and all("CRIT" not in r for r in result_logs if isinstance(r, str)):
-                crit_failed = True
-
-        # Step 5: Burst (crittable, no counter)
-        base_total = sum(h[1] for h in hits)
+        # Step 4: Burst hit (can crit)
+        base_total = sum(hit["damage"] for hit in hit_list)
         burst_damage = int(base_total * 1.20)
+        hit_list.append({"damage": burst_damage, "can_crit": True})
         logs.append(f"🔫 {self.name} unleashes {burst_damage // 1_000_000}M bonus burst damage.")
-        logs.extend(hero_deal_damage(
-            self, boss, burst_damage, is_active=True, team=team,
-            allow_counter=False, allow_crit=True
-        ))
 
-        # Step 6: Balanced Strike override
-        if hasattr(self.trait_enable, "override_crit_check"):
-            self.trait_enable.override_crit_check(crit_failed)
+        # Step 5: One combined damage call
+        logs += hero_deal_damage(self, boss, base_damage=0, is_active=True, team=team, hit_list=hit_list, allow_counter=True)
 
-        # Step 7: Buffs and debuffs
+        # Step 6: Buffs and debuffs
         unique_name = f"lfa_atk_down_active_{random.randint(0, 999999)}"
         logs.extend(BuffHandler.apply_debuff(boss, unique_name, {
             "attribute": "atk", "bonus": -0.30, "rounds": 9999
@@ -87,7 +69,7 @@ class LFA(Hero):
         }, boss))
         logs.append(f"💪 {self.name} gains +{steal_amount:,} ATK permanently by stealing it from the boss.")
 
-        # Step 8: Transition power
+        # Step 7: Transition power
         self.transition_power += 6
         logs.append(f"{self.name} gains 6 layers of Transition Power (TP now: {self.transition_power}).")
 
@@ -95,7 +77,6 @@ class LFA(Hero):
             logs.extend(self.release_transition_skill(boss, team))
 
         return logs
-
 
     def basic_attack(self, boss, team):
         if self.has_fear:
