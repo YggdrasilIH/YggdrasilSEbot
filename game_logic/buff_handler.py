@@ -62,14 +62,11 @@ class BuffHandler:
 
         # ✅ Curse of Decay offset routing to boss logic only
         if BuffHandler.is_attribute_buff(buff_data) and hero.curse_of_decay > 0:
-            if boss and hasattr(boss, "boss_deal_damage_to_hero"):
-                cod_dmg = int(boss.atk * 30 * hero.curse_of_decay)
-                dealt_dmg = boss.boss_deal_damage_to_hero(hero, cod_dmg)
-                msg = (
-                    f"💀 Curse of Decay offsets {attr} buff on {hero.name}. "
-                    f"Takes {dealt_dmg:,} damage. (1 layer removed)"
-                )
-                boss._round_curse_offsets.append(f"{hero.name}: {dealt_dmg // 1_000_000}M")
+            if boss and hasattr(boss, "apply_curse_of_decay_damage"):
+                cod_logs = []
+                boss.apply_curse_of_decay_damage(hero, cod_logs)
+                msg = f"💀 Curse of Decay offsets {attr} buff on {hero.name}. " + " ".join(cod_logs)
+
                 hero.curse_of_decay -= 1
                 return False, msg
             else:

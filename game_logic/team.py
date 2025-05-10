@@ -119,6 +119,7 @@ class Team:
                     crit_occurred = any("CRIT" in str(line) for line in skill_logs)
                     self.energy_gain_on_being_hit(boss, logs, crit_occurred)
                     hero._using_real_attack = False
+                    logs.extend(boss.flush_counterattacks(self.heroes))
                 else:
                     hero._using_real_attack = True
                     skill_logs = hero.basic_attack(boss, self)
@@ -131,6 +132,8 @@ class Team:
                     crit_occurred = any("CRIT" in str(line) for line in skill_logs)
                     self.energy_gain_on_being_hit(boss, logs, crit_occurred)
                     hero._using_real_attack = False
+                    logs.extend(boss.flush_counterattacks(self.heroes))
+
 
         boss_logs = boss.boss_action(self.heroes, round_num)
         logs.extend(boss_logs)
@@ -191,6 +194,24 @@ class Team:
 
         for hero in self.heroes:
             if hero.is_alive():
+                # ✅ FIRST: decrement control effects before any buffs/passives
+                if hero.has_fear:
+                    hero.fear_rounds -= 1
+                    if hero.fear_rounds <= 0:
+                        hero.has_fear = False
+                        hero.fear_rounds = 0
+                if hero.has_silence:
+                    hero.silence_rounds -= 1
+                    if hero.silence_rounds <= 0:
+                        hero.has_silence = False
+                        hero.silence_rounds = 0
+                if hero.has_seal_of_light:
+                    hero.seal_rounds -= 1
+                    if hero.seal_rounds <= 0:
+                        hero.has_seal_of_light = False
+                        hero.seal_rounds = 0
+
+                # ⬇️ Then apply normal end-of-round logic
                 if "start_ADR" in hero.buffs:
                     hero.buffs["start_ADR"]["bonus"] -= 10
                     if hero.buffs["start_ADR"]["bonus"] <= 0:
@@ -210,22 +231,6 @@ class Team:
                 if hasattr(hero, "lifestar") and hero.lifestar and hasattr(hero.lifestar, "end_of_round"):
                     logs += hero.lifestar.end_of_round(hero, self, boss, round_num)
 
-                if hero.has_fear:
-                    hero.fear_rounds -= 1
-                    if hero.fear_rounds <= 0:
-                        hero.has_fear = False
-                        hero.fear_rounds = 0
-                if hero.has_silence:
-                    hero.silence_rounds -= 1
-                    if hero.silence_rounds <= 0:
-                        hero.has_silence = False
-                        hero.silence_rounds = 0
-                if hero.has_seal_of_light:
-                    hero.seal_rounds -= 1
-                    if hero.seal_rounds <= 0:
-                        hero.has_seal_of_light = False
-                        hero.seal_rounds = 0
-
         if buffs_applied:
             logs.append("🛡️ End-of-Round Buffs:")
             logs.extend(group_team_buffs(buffs_applied))
@@ -239,6 +244,7 @@ class Team:
             logs += self.pet.apply_end_of_round(self, boss, round_num)
 
         return logs
+
 
     def status_descriptions(self):
         return [hero.get_status_description() for hero in self.heroes]

@@ -61,3 +61,13 @@ class Phoenix(Pet):
         logs.append(f"🔥 Phoenix uses active and heroes gain 80% increased damage against burning targets (3 rounds).")
         self.energy = 0
         return logs
+
+# game_logic/pets.py
+
+class Pet:
+    def bind_team(self, team):
+        self.team = team
+    def apply_start_of_battle(self, team):
+        return []
+    def apply_end_of_round(self, team, boss, round_num):
+        return []

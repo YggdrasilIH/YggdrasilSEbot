@@ -9,8 +9,8 @@ class Boss:
         self.name = "Boss"
         self.max_hp = 20_000_000_000_000_000_000
         self.hp = self.max_hp
-        self.atk = 1_250_000_000
-        self.base_atk = 1_250_000_000
+        self.atk = 1_550_000_000
+        self.base_atk = 1_550_000_000
         self.dr = 0
         self.block = 0
         self.dodge = 0
@@ -104,8 +104,7 @@ class Boss:
 
             if source_hero not in self._counterattack_sources:
                 self._counterattack_sources.add(source_hero)
-                logs += self.flush_counterattacks(team.heroes)
-
+            
         else:
             print(f"[DEBUG] ❌ Counterattack NOT triggered.")
 
@@ -173,8 +172,13 @@ class Boss:
         return logs
 
 
+    def apply_curse_of_decay_damage(self, hero, cod_logs):
+        base_damage = int(self.atk * 30)
+        damage = self.calculate_damage_to_hero(hero, base_damage, bypass_add_hd=True)
+        cod_logs.append(f"{hero.name} takes {damage // 1_000_000}M from Curse of Decay.")
 
-    def calculate_damage_to_hero(self, hero, base_damage):
+
+    def calculate_damage_to_hero(self, hero, base_damage, bypass_add_hd=False):
         if not hero.is_alive():
             return 0
         damage = base_damage
@@ -183,14 +187,14 @@ class Boss:
         if self.shrink_debuff:
             damage *= self.shrink_debuff.get("multiplier_dealt", 1)
 
-        # ✅ Apply All Damage Dealt (ADD), clamped
-        effective_add = max(-0.99, self.all_damage_dealt / 100)
-        damage *= (1 + effective_add)
+        # ✅ Skip ADD and HD for Curse of Decay
+        if not bypass_add_hd:
+            effective_add = max(-0.99, self.all_damage_dealt / 100)
+            damage *= (1 + effective_add)
 
-        # ✅ Apply Holy Damage (also additive)
-        effective_holy = max(0, self.hd * 0.007)
+            effective_holy = max(0, self.hd * 0.007)
+            damage *= (1 + effective_holy)
 
-        damage *= (1 + effective_holy)
 
         # ✅ Apply Damage Output Debuff (from e.g., LBRM transition)
         effective_output = max(-0.99, getattr(self, "damage_output", 0) / 100)
