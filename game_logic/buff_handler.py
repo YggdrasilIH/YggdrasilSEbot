@@ -56,6 +56,8 @@ class BuffHandler:
     
     @staticmethod
     def apply_buff(hero, buff_name, buff_data, boss=None, replace_existing=False):
+        if not hero.is_alive():
+            return False, f"{hero.name} is dead. Buff {buff_name} skipped."
         attr = buff_data.get("attribute")
         bonus = buff_data.get("bonus", 0)
         internal_attr = BuffHandler.ALIAS_MAP.get(attr, attr)
@@ -143,5 +145,7 @@ class BuffHandler:
         return logs
 
 def grant_energy(hero, amount: int) -> str:
+    before = hero.energy
     hero.energy += amount
+    print(f"[DEBUG-GRANT] {hero.name} gains {amount} energy (from {before} → {hero.energy})")
     return f"⚡ {hero.name} gains +{amount} energy after using their skill."

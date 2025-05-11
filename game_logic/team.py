@@ -60,12 +60,19 @@ class Team:
         self._batched_energy_logs.setdefault(gain, []).append(target.name)
 
     def perform_turn(self, boss, round_num):
+        for hero in self.heroes:
+            print(f"[DEBUG-ENERGY] {hero.name} pre-turn: {hero.energy}")
         logs = []
         if not boss.is_alive():
             return logs
 
         for hero in self.heroes:
-            hero.energy += 50
+            success, msg = BuffHandler.apply_buff(hero, f"start_energy_gain_{round_num}", {
+                "attribute": "energy", "bonus": 50, "rounds": 0
+            }, boss)
+            if msg:
+                logs.append(msg)
+
         logs.append("⚡ All heroes gain +50 energy at start of round.")
 
         for hero in self.heroes:
@@ -117,7 +124,7 @@ class Team:
                     if self.pet and hasattr(self.pet, "on_hero_active"):
                         self.pet.on_hero_active(hero)
                     crit_occurred = any("CRIT" in str(line) for line in skill_logs)
-                    self.energy_gain_on_being_hit(boss, logs, crit_occurred)
+                    self.energy_gain_on_being_hit(hero, logs, crit_occurred)
                     hero._using_real_attack = False
                     logs.extend(boss.flush_counterattacks(self.heroes))
                 else:
@@ -130,7 +137,7 @@ class Team:
                     logs.extend(apply_foresight(hero, "basic"))
                     logs.append(grant_energy(hero, 50))
                     crit_occurred = any("CRIT" in str(line) for line in skill_logs)
-                    self.energy_gain_on_being_hit(boss, logs, crit_occurred)
+                    self.energy_gain_on_being_hit(hero, logs, crit_occurred)
                     hero._using_real_attack = False
                     logs.extend(boss.flush_counterattacks(self.heroes))
 

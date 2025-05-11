@@ -123,6 +123,8 @@ class dDB(DB):
 
         if buffs_applied:
             logs.extend(group_team_buffs(buffs_applied))
+        print(f"[DEBUG-DB] {hero.name} gains energy from DB feed. Energy now: {hero.energy}")
+
         return logs
 
 
@@ -182,6 +184,7 @@ class Mirror(Artifact):
 
         if buffs_applied:
             msgs.extend(group_team_buffs(buffs_applied))
+        print(f"[DEBUG-MIRROR] {hero.name} gains +15 energy from Mirror (curse check: {hero.curse_of_decay})")
 
         return msgs
 

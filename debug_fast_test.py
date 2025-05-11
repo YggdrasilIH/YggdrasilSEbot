@@ -8,7 +8,8 @@ from utils.battle import chunk_logs
 import re, sys, os
 from contextlib import contextmanager
 
-DEBUG_BUFFS = True  # Toggle buff logging on/off
+
+DEBUG_BUFFS = False # Toggle buff logging on/off
 
 @contextmanager
 def suppress_stdout():
@@ -33,14 +34,14 @@ def run_debugfast_terminal():
         ("hero_LFA_Hero", 2e10, 1.75e8, 3540, "MP", "BS", Antlers(), 15, 20, 150, 150, 600, 150, 150, 0, 16, 8999),
         ("hero_PDE_Hero", 0.9e10, 6e7, 3300, "MP", "UW", Scissors(), 15, 0, 0, 0, 0, 0, 0, 59, 40, 8444),
         ("hero_LBRM_Hero", 0.9e10, 5e7, 2000, "MP", "UW", Scissors(), 14, 0, 0, 0, 0, 0, 0, 59, 46, 8000),
-        ("hero_ELY_Hero", 0.76e10, 9e7, 2300, "MP", "UW", Antlers(), 0, 0, 0, 0, 0, 0, 0, 40, 44, 5299)
+        ("hero_DGN_Hero", 0.76e10, 9e7, 2300, "MP", "UW", Antlers(), 0, 0, 0, 0, 0, 0, 0, 40, 44, 5299)
     ]
 
     heroes = []
     for hid, hp, atk, spd, purify, trait, artifact, dt_level, crit_rate, crit_dmg, precision, hd, skill_damage, add, dr, adr, armor in data:
         lifestar = Specter() if hid == "hero_LFA_Hero" else Nova() if hid == "hero_SQH_Hero" else None
-        if hid == "hero_PDE_Hero":
-            h.immune_control_effect = "seal_of_light"
+   #     if hid == "hero_PDE_Hero":
+    #        h.immune_control_effect = "seal_of_light"
         h = Hero.from_stats(hid, [hp, atk, spd], artifact=artifact, lifestar=lifestar)
         h.set_enables(purify_mapping.get(purify), trait_mapping.get(trait))
         h.dt_level = dt_level
@@ -84,9 +85,9 @@ def run_debugfast_terminal():
                     print(f"[DEBUG] {h.name} buff {name}: {buff}")
 
         hero_start_dmg = {h.name: h.total_damage_dealt for h in team.heroes}
-        with suppress_stdout():
-            team.perform_turn(boss, round_num)
-            team.end_of_round(boss, round_num)
+       # with suppress_stdout():
+        team.perform_turn(boss, round_num)
+        team.end_of_round(boss, round_num)
         hero_end_dmg = {h.name: h.total_damage_dealt for h in team.heroes}
 
         if round_num == 1:
@@ -96,6 +97,7 @@ def run_debugfast_terminal():
             print("-" * len(header))
 
         print(f"\n🔁 Round {round_num}")
+        print("Energy   | " + " | ".join(f"{h.energy:8}" for h in team.heroes))
         print("DMG (B)  | " + " | ".join(
     f"{(hero_end_dmg[h.name] - hero_start_dmg[h.name]) / 1e9:8.2f}" for h in team.heroes
 ))
@@ -105,7 +107,7 @@ def run_debugfast_terminal():
             f"{(hero_end_dmg[h.name] - hero_start_dmg[h.name]):8.2e}" for h in team.heroes
         ))
 
-        print("Energy   | " + " | ".join(f"{h.energy:8}" for h in team.heroes))
+        
         print("Calamity | " + " | ".join(f"{h.calamity:8}" for h in team.heroes))
         print("Curse    | " + " | ".join(f"{h.curse_of_decay:8}" for h in team.heroes))
 
@@ -152,4 +154,6 @@ def run_debugfast_terminal():
         print(f"📊 Total Damage Tracked: {boss.total_damage_taken:.2e}")
 
 if __name__ == "__main__":
+    sys.stdout = open("pde_debug_output.txt", "w")
     run_debugfast_terminal()
+    sys.stdout.close()

@@ -186,11 +186,11 @@ class Boss:
 
     def apply_curse_of_decay_damage(self, hero, cod_logs):
         base_damage = int(self.atk * 30)
-        damage = self.calculate_damage_to_hero(hero, base_damage, bypass_add_hd=True)
+        damage = self.calculate_damage_to_hero(hero, base_damage, bypass_add_hd=True, bypass_shields=True)
         cod_logs.append(f"{hero.name} takes {damage // 1_000_000}M from Curse of Decay.")
 
 
-    def calculate_damage_to_hero(self, hero, base_damage, bypass_add_hd=False):
+    def calculate_damage_to_hero(self, hero, base_damage, bypass_add_hd=False, bypass_shields=False):
         if not hero.is_alive():
             return 0
         damage = base_damage
@@ -240,10 +240,11 @@ class Boss:
         damage = max(0, int(damage))
 
         # ✅ Shield Absorption
-        if hero.shield > 0:
+        if hero.shield > 0 and not bypass_shields:
             absorbed = min(hero.shield, damage)
             hero.shield -= absorbed
             damage -= absorbed
+
 
         # ✅ Unbending Will (trait)
         if hasattr(hero, "trait_enable") and hasattr(hero.trait_enable, "prevent_death"):
@@ -480,9 +481,14 @@ class Boss:
                 self.shrink_debuff = None
                 logs.append("🌀 Shrink expired.")
 
-        if self.non_skill_debuffs:
-            removed = self.non_skill_debuffs.pop(0)
-            logs.append(f"🧹 Removed debuff: {removed}")
+        # Remove 1 random attribute reduction debuff using BuffHandler
+        debuffs = [k for k, v in self.buffs.items() if BuffHandler.is_attribute_reduction(v)]
+        if debuffs:
+            to_remove = random.choice(debuffs)
+            del self.buffs[to_remove]
+            logs.append(f"🧹 Boss removes debuff: {to_remove}")
+            self.recalculate_stats()
+
 
         alive_heroes = [h for h in heroes if h.is_alive()]
         if alive_heroes:
@@ -511,9 +517,12 @@ class Boss:
                     if isinstance(v, dict) and v.get("attribute") in BuffHandler.ATTRIBUTE_BUFF_KEYS
                 ]
                 if attr_buffs:
-                    to_remove = random.choice(attr_buffs)
-                    del highest_atk.buffs[to_remove]
-                    logs.append(f"Boss removes attribute buff '{to_remove}' from {highest_atk.name}")
+                    chosen_attr = random.choice(attr_buffs)
+                    removed_keys = [k for k, v in highest_atk.buffs.items() if isinstance(v, dict) and v.get("attribute") == chosen_attr]
+                    for key in removed_keys:
+                        del highest_atk.buffs[key]
+                    logs.append(f"Boss removes all '{chosen_attr}' buffs from {highest_atk.name} ({len(removed_keys)} stack{'s' if len(removed_keys)!=1 else ''})")
+
 
         for hero in alive_heroes:
             if hero.calamity == 0:

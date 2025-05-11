@@ -55,10 +55,10 @@ def create_team_and_boss():
         lifestar = None
         if hid == "hero_PDE_Hero":
             h.immune_control_effect = "seal_of_light"
-        if hid == "hero_LBRM_Hero":
-            h.immune_control_effect = "seal_of_light"
-        if hid == "hero_LFA_Hero":
-           h.immune_control_effect = "seal_of_light"
+#        if hid == "hero_LBRM_Hero":
+ #           h.immune_control_effect = "seal_of_light"
+  #      if hid == "hero_LFA_Hero":
+   #        h.immune_control_effect = "seal_of_light"
         if hid == "hero_LFA_Hero":
             lifestar = Specter()
         elif hid == "hero_SQH_Hero":

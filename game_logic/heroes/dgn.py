@@ -149,6 +149,7 @@ class DGN(Hero):
             buffs = [
                 (n, b) for n, b in self.buffs.items()
                 if BuffHandler.is_attribute_buff(b, strict=True)
+                and b.get("attribute") != "energy"
                 and not n.startswith("gg_")
                 and "_self" not in n
             ]

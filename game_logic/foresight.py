@@ -16,15 +16,17 @@ def apply_foresight(hero, source):
             "attribute": "all_damage_dealt",
             "bonus": 30,
             "rounds": 15,
-            "skill_buff": True  # Mark as skill_buff to avoid Curse
+            "skill_buff": True
         })
 
         BuffHandler.apply_buff(hero, f"{buff_key}_energy", {
             "attribute": "energy",
             "bonus": 50,
-            "rounds": 0,  # immediate energy grant
-            "skill_buff": True
+            "rounds": 0,
+            "skill_buff": False
         })
+
+        print(f"[DEBUG-FORESIGHT] {hero.name} gains +50 Energy from Foresight (Basic). Now at: {hero.energy}")
 
         logs.append(f"🧿 {hero.name} gains Foresight (Basic): +30% All Damage for 15 rounds and +50 Energy.")
 
