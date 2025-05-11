@@ -9,8 +9,8 @@ class Boss:
         self.name = "Boss"
         self.max_hp = 20_000_000_000_000_000_000
         self.hp = self.max_hp
-        self.atk = 1_550_000_000
-        self.base_atk = 1_550_000_000
+        self.atk = 1_000_000_000
+        self.base_atk = 1_000_000_000
         self.dr = 0
         self.block = 0
         self.dodge = 0
@@ -73,7 +73,8 @@ class Boss:
         self.atk = max(self.atk, 1)
 
 
-    def take_damage(self, dmg, source_hero=None, team=None, real_attack=False):
+    def take_damage(self, dmg, source_hero=None, team=None, real_attack=False, bypass_modifiers=False):
+
         logs = []
 
         print(f"[DEBUG] Boss.take_damage → Called with dmg={dmg}")
@@ -86,7 +87,13 @@ class Boss:
         if self.shrink_debuff:
             multiplier *= self.shrink_debuff.get("multiplier_received", 1)
         damage_bonus = 1 + (self.all_damage_dealt / 100)
-        effective_dmg = dmg * multiplier * damage_bonus
+        if bypass_modifiers:
+            effective_dmg = dmg
+        else:
+            effective_dmg = dmg * multiplier * damage_bonus
+            effective_dmg *= (1 - self.dr)
+            effective_dmg *= (1 - self.ADR)
+
 
         dr = min(getattr(self, "dr", 0), 0.75)
         effective_dmg *= (1 - dr)
@@ -107,6 +114,11 @@ class Boss:
             
         else:
             print(f"[DEBUG] ❌ Counterattack NOT triggered.")
+
+        if source_hero and source_hero.is_alive():
+            from game_logic.heroes.base import Hero
+            if isinstance(source_hero, Hero):
+                source_hero.total_damage_dealt += effective_dmg
 
         return logs
 

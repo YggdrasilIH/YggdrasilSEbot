@@ -42,12 +42,12 @@ def create_team_and_boss():
     game_logic.cores.active_core = PDECore()
 
     data = [
-        ("hero_MFF_Hero", 11e12, 6e7, 3800, "MP", "UW", dDB(), 15, 0, 0, 0, 0, 0, 0, 59, 40, 8000),
-        ("hero_SQH_Hero", 12e12, 7e7, 3440, "MP", "UW", dMirror(), 15, 0, 0, 0, 0, 0, 0, 59, 40, 9000),
-        ("hero_LFA_Hero", 20e12, 2.4e8, 3500, "MP", "BS", Antlers(), 15, 70, 150, 150, 600, 150, 150, 0, 16, 8999),
-        ("hero_PDE_Hero", 9e12, 6e7, 2300, "MP", "UW", Scissors(), 15, 0, 0, 0, 0, 0, 0, 59, 40, 8444),
-        ("hero_LBRM_Hero", 9.9e12, 5e7, 2000, "MP", "UW", dMirror(), 14, 0, 0, 0, 0, 0, 0, 59, 46, 8000),
-        ("hero_ELY_Hero", 14e12, 16e7, 2500, "MP", "UW", Antlers(), 15, 0, 0, 0, 0, 0, 0, 59, 16, 7999)
+        ("hero_MFF_Hero", 11e9, 6e7, 3800, "MP", "UW", dDB(), 15, 0, 0, 0, 0, 0, 0, 59, 40, 8000),
+        ("hero_SQH_Hero", 12e9, 7e7, 3440, "MP", "UW", dMirror(), 15, 0, 0, 0, 0, 0, 0, 59, 40, 9000),
+        ("hero_LFA_Hero", 20e9, 2e8, 3200, "MP", "BS", Antlers(), 15, 20, 150, 150, 600, 150, 150, 0, 16, 8999),
+        ("hero_PDE_Hero", 9e9, 6e7, 2200, "MP", "UW", Scissors(), 15, 0, 0, 0, 0, 0, 0, 59, 40, 8444),
+        ("hero_LBRM_Hero", 9.9e9, 5e7, 2000, "MP", "UW", dMirror(), 14, 0, 0, 0, 0, 0, 0, 59, 46, 8000),
+        ("hero_ELY_Hero", 9e9, 16e7, 2500, "ARP", "UW", Antlers(), 0, 0, 0, 0, 0, 0, 0, 40, 46, 7999)
     ]
 
     heroes = []
@@ -57,6 +57,8 @@ def create_team_and_boss():
             h.immune_control_effect = "seal_of_light"
         if hid == "hero_LBRM_Hero":
             h.immune_control_effect = "seal_of_light"
+        if hid == "hero_LFA_Hero":
+           h.immune_control_effect = "seal_of_light"
         if hid == "hero_LFA_Hero":
             lifestar = Specter()
         elif hid == "hero_SQH_Hero":
@@ -106,6 +108,9 @@ def run_debugfast_average():
     num_simulations = 100
     hero_totals = {}
     boss_totals = []
+    ely_deaths = 0
+    ely_rounds_survived = []
+
     
 
     best_damage = -float('inf')
@@ -113,9 +118,12 @@ def run_debugfast_average():
     best_sim = None
     worst_sim = None
 
-    with suppress_stdout():  # 🔇 No spam inside simulation
+    with suppress_stdout():
         for sim_num in range(num_simulations):
             team, boss, heroes = create_team_and_boss()
+            ely = next((h for h in heroes if h.name == "ELY"), None)
+            track_ely = ely is not None
+            died_round = 15
 
             for hero in heroes:
                 if hasattr(hero, "start_of_battle"):
@@ -131,6 +139,11 @@ def run_debugfast_average():
 
                 _ = team.perform_turn(boss, round_num)
                 _ = team.end_of_round(boss, round_num)
+                if track_ely and not ely.is_alive():
+                    died_round = round_num
+                    ely_deaths += 1
+                    break
+
 
             for hero in heroes:
                 hero_totals.setdefault(hero.name, 0)
@@ -146,6 +159,10 @@ def run_debugfast_average():
             if team_total < worst_damage:
                 worst_damage = team_total
                 worst_sim = [h.total_damage_dealt for h in heroes]
+
+            if track_ely:
+                ely_rounds_survived.append(died_round)
+
 
     # 🧠 OUTSIDE suppress_stdout → safe to print
     print("\n🏹 FINAL AVERAGE SUMMARY (across {} battles)\n".format(num_simulations))
@@ -170,6 +187,11 @@ def run_debugfast_average():
 
     print(f"\n⭐ Best Single Battle: {best_damage:.2e}")
     print(f"📉 Worst Single Battle: {worst_damage:.2e}")
+    if ely_rounds_survived:
+        avg_survival = sum(ely_rounds_survived) / len(ely_rounds_survived)
+        print(f"\n💀 ELY Deaths: {ely_deaths} out of {len(ely_rounds_survived)}")
+        print(f"📊 ELY Average Round Survived: {avg_survival:.2f}")
+
 
 if __name__ == "__main__":
     run_debugfast_average()

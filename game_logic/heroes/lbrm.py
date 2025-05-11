@@ -172,7 +172,8 @@ class LBRM(Hero):
         calc_damage = int(boss.max_hp * 0.30)
         cap_damage = int(self.atk * 30)
         damage_to_deal = min(calc_damage, cap_damage)
-        boss.take_damage(damage_to_deal)
+        boss.take_damage(damage_to_deal, source_hero=self, team=team, real_attack=False, bypass_modifiers=True)
+
         logs.append(f"💥 Deals {damage_to_deal / 1e6:.0f}M damage to Boss.")
 
         option = random.choice([1, 2, 3])

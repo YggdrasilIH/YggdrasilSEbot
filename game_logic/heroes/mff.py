@@ -175,46 +175,74 @@ class MFF(Hero):
 
 
             return logs
-    
+        
     def end_of_round(self, boss, team, round_num):
         if self.has_seal_of_light:
-            return super().end_of_round(boss, team, round_num)  # Passive stacking blocked by Seal of Light
+            return super().end_of_round(boss, team, round_num)
 
         logs = super().end_of_round(boss, team, round_num)
 
         if self.permanent_ef3_bonus_active:
-            # 🌳 MFF self stacking
-            self.add_or_update_buff(self, f"ef3_self_atk_{round_num}", {
-                "attribute": "atk", "bonus": int(self.atk * 0.12), "rounds": 9999, "skill_buff": True
+            # Remove prior self EF3 buffs and accumulate their values
+            atk_total = 0
+            spd_total = 0
+            for name in list(self.buffs):
+                if name.startswith("ef3_self_atk_"):
+                    atk_total += self.buffs[name]["bonus"]
+                    del self.buffs[name]
+                elif name.startswith("ef3_self_speed_"):
+                    spd_total += self.buffs[name]["bonus"]
+                    del self.buffs[name]
+
+            # Stack new round’s EF3 buffs
+            atk_total += int(self.atk * 0.12)
+            spd_total += 15
+            self.apply_buff(f"ef3_self_atk_{round_num}", {
+                "attribute": "atk", "bonus": atk_total, "rounds": 9999, "skill_buff": True
             })
-            self.add_or_update_buff(self, f"ef3_self_speed_{round_num}", {
-                "attribute": "speed", "bonus": 15, "rounds": 9999, "skill_buff": True
+            self.apply_buff(f"ef3_self_speed_{round_num}", {
+                "attribute": "speed", "bonus": spd_total, "rounds": 9999, "skill_buff": True
             })
-            self.bonus_damage_vs_poisoned += 10.0  # Not offsettable; tracks internally
+            self.bonus_damage_vs_poisoned += 10.0
 
             for ally in team.heroes:
-                if ally != self and ally.is_alive():
-                    # ✅ Ally ATK buff based on **own** ATK
-                    ally_bonus_atk = int(ally.atk * 0.12)
-                    ally_bonus_speed = 5  # 15 * 0.33 rounded down
+                if ally == self or not ally.is_alive():
+                    continue
 
-                    self.add_or_update_buff(ally, f"ef3_ally_atk_{round_num}", {
-                        "attribute": "atk", "bonus": ally_bonus_atk, "rounds": 9999, "skill_buff": True
-                    })
-                    self.add_or_update_buff(ally, f"ef3_ally_speed_{round_num}", {
-                        "attribute": "speed", "bonus": ally_bonus_speed, "rounds": 9999, "skill_buff": True
-                    })
+                # Remove and accumulate old EF3 buffs
+                ally_atk = 0
+                ally_spd = 0
+                poison_bonus = 0
+                for name in list(ally.buffs):
+                    if name.startswith("ef3_ally_atk_"):
+                        ally_atk += ally.buffs[name]["bonus"]
+                        del ally.buffs[name]
+                    elif name.startswith("ef3_ally_speed_"):
+                        ally_spd += ally.buffs[name]["bonus"]
+                        del ally.buffs[name]
+                    elif name.startswith("ef3_poison_bonus_"):
+                        poison_bonus += ally.buffs[name]["bonus"]
+                        del ally.buffs[name]
 
-                    # ✅ Track poison bonus stacking
-                    if not hasattr(ally, "bonus_damage_vs_poisoned"):
-                        ally.bonus_damage_vs_poisoned = 0.0
-                    ally.bonus_damage_vs_poisoned += 3.3
+                # Add new stack
+                ally_atk += int(ally.atk * 0.12)
+                ally_spd += 5
+                poison_bonus += 3.3
 
-                    self.add_or_update_buff(ally, f"ef3_poison_bonus_{round_num}", {
-                        "attribute": "poison_bonus", "bonus": 3.3, "rounds": 9999, "skill_buff": True
-                    })
+                ally.apply_buff(f"ef3_ally_atk_{round_num}", {
+                    "attribute": "atk", "bonus": ally_atk, "rounds": 9999, "skill_buff": True
+                })
+                ally.apply_buff(f"ef3_ally_speed_{round_num}", {
+                    "attribute": "speed", "bonus": ally_spd, "rounds": 9999, "skill_buff": True
+                })
+                ally.apply_buff(f"ef3_poison_bonus_{round_num}", {
+                    "attribute": "poison_bonus", "bonus": poison_bonus, "rounds": 9999, "skill_buff": True
+                })
 
-            logs.append(f"🌳 {self.name} stacks EF3 buffs: +12% ATK, +15 SPD, +10% Poison Bonus (self), +3.3% (allies).")
+                if not hasattr(ally, "bonus_damage_vs_poisoned"):
+                    ally.bonus_damage_vs_poisoned = 0.0
+                ally.bonus_damage_vs_poisoned += 3.3
+
+            logs.append(f"🌳 {self.name} stacks EF3: {atk_total} ATK, {spd_total} SPD (self), +3.3% Poison Bonus to allies.")
 
         return logs
-

@@ -248,6 +248,9 @@ class Hero:
 
 
     def end_of_round(self, boss, team, round_num):
+        if not self.is_alive():
+            return [f"{self.name} is dead and skips end-of-round effects."]
+
         self.decrement_control_effects()
 
         self.recalculate_stats()

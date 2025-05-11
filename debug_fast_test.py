@@ -30,15 +30,17 @@ def run_debugfast_terminal():
     data = [
         ("hero_MFF_Hero", 1.1e10, 6e7, 3800, "MP", "UW", dDB(), 15, 0, 0, 0, 0, 0, 0, 59, 40, 8000),
         ("hero_SQH_Hero", 1.2e10, 7e7, 3670, "MP", "UW", dMirror(), 15, 0, 0, 0, 0, 0, 0, 59, 40, 9000),
-        ("hero_LFA_Hero", 2e10, 1.75e8, 3540, "MP", "BS", Antlers(), 15, 70, 150, 150, 600, 150, 150, 0, 16, 8999),
-        ("hero_PDE_Hero", 0.9e10, 6e7, 2300, "MP", "UW", Scissors(), 15, 0, 0, 0, 0, 0, 0, 59, 40, 8444),
+        ("hero_LFA_Hero", 2e10, 1.75e8, 3540, "MP", "BS", Antlers(), 15, 20, 150, 150, 600, 150, 150, 0, 16, 8999),
+        ("hero_PDE_Hero", 0.9e10, 6e7, 3300, "MP", "UW", Scissors(), 15, 0, 0, 0, 0, 0, 0, 59, 40, 8444),
         ("hero_LBRM_Hero", 0.9e10, 5e7, 2000, "MP", "UW", Scissors(), 14, 0, 0, 0, 0, 0, 0, 59, 46, 8000),
-        ("hero_ELY_Hero", .76e10, 9e7, 3300, "MP", "UW", Scissors(), 0, 0, 0, 0, 0, 0, 0, 59, 16, 7999)
+        ("hero_ELY_Hero", 0.76e10, 9e7, 2300, "MP", "UW", Antlers(), 0, 0, 0, 0, 0, 0, 0, 40, 44, 5299)
     ]
 
     heroes = []
     for hid, hp, atk, spd, purify, trait, artifact, dt_level, crit_rate, crit_dmg, precision, hd, skill_damage, add, dr, adr, armor in data:
         lifestar = Specter() if hid == "hero_LFA_Hero" else Nova() if hid == "hero_SQH_Hero" else None
+        if hid == "hero_PDE_Hero":
+            h.immune_control_effect = "seal_of_light"
         h = Hero.from_stats(hid, [hp, atk, spd], artifact=artifact, lifestar=lifestar)
         h.set_enables(purify_mapping.get(purify), trait_mapping.get(trait))
         h.dt_level = dt_level
@@ -94,7 +96,15 @@ def run_debugfast_terminal():
             print("-" * len(header))
 
         print(f"\n🔁 Round {round_num}")
-        print("DMG (B)  | " + " | ".join(f"{(hero_end_dmg[h.name] - hero_start_dmg[h.name]) / 1e9:8.2f}" for h in team.heroes))
+        print("DMG (B)  | " + " | ".join(
+    f"{(hero_end_dmg[h.name] - hero_start_dmg[h.name]) / 1e9:8.2f}" for h in team.heroes
+))
+
+# NEW: Print actual damage amounts in scientific notation if very large
+        print("DMG (A)  | " + " | ".join(
+            f"{(hero_end_dmg[h.name] - hero_start_dmg[h.name]):8.2e}" for h in team.heroes
+        ))
+
         print("Energy   | " + " | ".join(f"{h.energy:8}" for h in team.heroes))
         print("Calamity | " + " | ".join(f"{h.calamity:8}" for h in team.heroes))
         print("Curse    | " + " | ".join(f"{h.curse_of_decay:8}" for h in team.heroes))
@@ -118,11 +128,9 @@ def run_debugfast_terminal():
         total = h.total_damage_dealt
         percent = (total / total_team * 100) if total_team else 0
         label = f"{h.name:>8}"
-        if total >= 1e13:
-            dmg_str = f"{total:.2e}"
-        else:
-            dmg_str = f"{total / 1e9:6.2f}B"
+        dmg_str = f"{total:.2e}"  # Always use scientific notation
         print(f"{label}: {dmg_str} DMG ({percent:5.1f}%)")
+
 
     print("\n📈 Boss Buffs Per Round:")
     print("Round |   ATK   |   HD   |  ADD  |  DR  | ADR")
@@ -131,10 +139,17 @@ def run_debugfast_terminal():
 
     if not boss.is_alive():
         print("\n🏆 Boss defeated!")
+        print(f"\n🩸 Boss HP Remaining: {boss.hp:.2e} / {boss.max_hp:.2e}")
+        print(f"📊 Total Damage Tracked: {boss.total_damage_taken:.2e}")
+
     elif all(not h.is_alive() for h in team.heroes):
         print("\n❌ All heroes have fallen!")
+        print(f"\n🩸 Boss HP Remaining: {boss.hp:.2e} / {boss.max_hp:.2e}")
+        print(f"📊 Total Damage Tracked: {boss.total_damage_taken:.2e}")
     else:
         print("\n⏳ Battle ended after 15 rounds (Boss survived).")
+        print(f"\n🩸 Boss HP Remaining: {boss.hp:.2e} / {boss.max_hp:.2e}")
+        print(f"📊 Total Damage Tracked: {boss.total_damage_taken:.2e}")
 
 if __name__ == "__main__":
     run_debugfast_terminal()
