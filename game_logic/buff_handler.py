@@ -53,40 +53,38 @@ class BuffHandler:
         while name in buffs:
             name = f"{base_name}_{random.randint(1000, 9999)}"
         return name
-    
+        
     @staticmethod
     def apply_buff(hero, buff_name, buff_data, boss=None, replace_existing=False):
         if not hero.is_alive():
             return False, f"{hero.name} is dead. Buff {buff_name} skipped."
+
         attr = buff_data.get("attribute")
         bonus = buff_data.get("bonus", 0)
         internal_attr = BuffHandler.ALIAS_MAP.get(attr, attr)
 
-        # ✅ Curse of Decay offset routing to boss logic only
+        # Finalize unique buff name if needed
+        if buff_name in hero.buffs and not replace_existing:
+            existing = hero.buffs[buff_name]
+            if (
+                existing.get("attribute") == attr and
+                isinstance(existing.get("bonus"), (int, float))
+            ):
+                buff_name = BuffHandler._generate_unique_name(buff_name, hero.buffs)
+
+        # ✅ Curse of Decay check AFTER final buff name is resolved
         if BuffHandler.is_attribute_buff(buff_data) and hero.curse_of_decay > 0:
             if boss and hasattr(boss, "apply_curse_of_decay_damage"):
                 cod_logs = []
                 boss.apply_curse_of_decay_damage(hero, cod_logs)
                 msg = f"💀 Curse of Decay offsets {attr} buff on {hero.name}. " + " ".join(cod_logs)
-
                 hero.curse_of_decay -= 1
                 return False, msg
             else:
                 return False, f"💀 Curse of Decay offsets {attr} buff on {hero.name} (boss missing)."
 
-        # ✅ Stack if buff name already exists with same attribute
-        if buff_name in hero.buffs and not replace_existing:
-            existing = hero.buffs[buff_name]
-            if existing.get("attribute") == attr and isinstance(existing.get("bonus"), (int, float)):
-                existing["bonus"] += bonus
-                existing["rounds"] = max(existing.get("rounds", 0), buff_data.get("rounds", 0))
-                buff_data = existing
-            else:
-                # Fallback to unique name for different buff type
-                buff_name = BuffHandler._generate_unique_name(buff_name, hero.buffs)
-                hero.buffs[buff_name] = buff_data
-        else:
-            hero.buffs[buff_name] = buff_data
+        # ✅ Apply new or replacement buff
+        hero.buffs[buff_name] = buff_data
 
         # ✅ Apply effect to stat
         try:
@@ -127,6 +125,8 @@ class BuffHandler:
             pass
 
         return True, None
+
+
 
     @staticmethod
     def apply_debuff(target, debuff_name, debuff_data, boss=None):

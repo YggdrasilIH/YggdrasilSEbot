@@ -20,7 +20,8 @@ class PDE(Hero):
         if buff_name in hero.buffs:
             existing = hero.buffs[buff_name]
             if "layers" in buff_data:
-                existing["layers"] += buff_data.get("layers", 0)
+                existing["layers"] = min(existing.get("layers", 0) + buff_data.get("layers", 0), 3)
+
             if "bonus" in buff_data:
                 existing["bonus"] += buff_data.get("bonus", 0)
             if "heal_amount" in buff_data:
@@ -89,7 +90,8 @@ class PDE(Hero):
         cleanse_logs = []
         buff_logs = []
 
-        controlled = [h for h in allies if h.is_alive() and (h.has_fear or h.has_silence or h.has_seal_of_light)]
+        controlled = [h for h in team.heroes if h.is_alive() and (h.has_fear or h.has_silence or h.has_seal_of_light)]
+
         to_cleanse = controlled[:2]
 
         for h in to_cleanse:
@@ -128,7 +130,11 @@ class PDE(Hero):
     def on_receive_damage(self, attacker, team, attack_type):
         if self.has_seal_of_light:
             return []  # Passive blocked by Seal of Light
+        
+        
         logs = []
+        if self._last_damage_received == 0:
+            return logs
         if attack_type.lower() in ["basic", "active"]:
             if self.transition_power >= 3:
                 logs.append(f"{self.name} is struck by a {attack_type.lower()} skill and triggers transition skill.")
@@ -168,18 +174,18 @@ class PDE(Hero):
 
             buffs_applied = []
             for hero in team.back_line:
-                BuffHandler.apply_buff(hero, "hd_up", {"attribute": "hd", "bonus": 10, "rounds": 2}, boss)
+                BuffHandler.apply_buff(hero, "pde_hd_up", {"attribute": "hd", "bonus": 10, "rounds": 2}, boss)
                 buffs_applied.append((hero.name, "+10% HD"))
 
             highest = max(team.heroes, key=lambda h: h.atk)
-            BuffHandler.apply_buff(highest, "dmg_up", {"attribute": "all_damage_dealt", "bonus": 15, "rounds": 2}, boss)
+            BuffHandler.apply_buff(highest, "pde_dmg_up", {"attribute": "all_damage_dealt", "bonus": 15, "rounds": 2}, boss)
             buffs_applied.append((highest.name, "+15% All Damage Dealt"))
 
             if tp_before_release >= 6:
                 boss.apply_buff("atk_down", {"value": 0.20, "rounds": 2})
                 logs.append(f"🔻 {boss.name}'s attack reduced by 20% for 2 rounds.")
                 for hero in team.back_line:
-                    BuffHandler.apply_buff(hero, "all_dmg_up", {"attribute": "all_damage_dealt", "bonus": 20, "rounds": 3}, boss)
+                    BuffHandler.apply_buff(hero, "pde_all_dmg_up", {"attribute": "all_damage_dealt", "bonus": 20, "rounds": 3}, boss)
                     buffs_applied.append((hero.name, "+20% All Damage Dealt"))
 
             if buffs_applied:

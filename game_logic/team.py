@@ -6,22 +6,31 @@ from game_logic.lifestar import Nova
 
 CONTROL_EFFECTS = {"fear", "silence", "seal of light"}
 
-def group_control_effects(logs):
+def group_control_effects(logs, team):
     grouped = []
-    control_map = {}
+
+    # Keep only non-control logs, skip duplicates
     for line in logs:
         if isinstance(line, str) and any(effect in line.lower() for effect in CONTROL_EFFECTS):
-            parts = line.split()
-            hero_name = parts[0]
-            for effect in CONTROL_EFFECTS:
-                if effect in line.lower():
-                    control_map.setdefault(hero_name, []).append(effect.title())
-                    print(f"[DEBUG-CTRL-APPLY] {effect.title()} applied to {hero_name} → Line: {line}")
-        else:
-            grouped.append(line)
-    for hero, effects in control_map.items():
-        grouped.append(f"🔻 {hero} is controlled by {', '.join(effects)} (2 rounds).")
+            continue  # Skip raw control lines
+        grouped.append(line)
+
+    # Append final consolidated control status
+    for hero in team.heroes:
+        if not hero.is_alive():
+            continue
+        effects = []
+        if hero.has_fear:
+            effects.append("Fear")
+        if hero.has_silence:
+            effects.append("Silence")
+        if hero.has_seal_of_light:
+            effects.append("Seal of Light")
+        if effects:
+            grouped.append(f"🔻 {hero.name} is controlled by {', '.join(effects)} (2 rounds).")
+
     return grouped
+
 
 class Team:
     def __init__(self, heroes, front_line, back_line, pet=None):
@@ -66,19 +75,20 @@ class Team:
         if not boss.is_alive():
             return logs
 
+        # 🔄 Sort by speed before acting
+        self.heroes.sort(key=lambda h: h.spd, reverse=True)
+
         for hero in self.heroes:
             success, msg = BuffHandler.apply_buff(hero, f"start_energy_gain_{round_num}", {
                 "attribute": "energy", "bonus": 50, "rounds": 0
             }, boss)
             if msg:
                 logs.append(msg)
-
         logs.append("⚡ All heroes gain +50 energy at start of round.")
 
         for hero in self.heroes:
             if hero.artifact and hasattr(hero.artifact, "start_of_round"):
                 hero.artifact.start_of_round(hero, self, boss, round_num)
-
 
         for hero in self.heroes:
             if round_num == 1:
@@ -93,58 +103,63 @@ class Team:
         logs.append(f"⚔️ Team begins actions for Round {round_num}.")
 
         for hero in self.heroes:
-            if hero.is_alive():
-                hero.recalculate_stats()
-                print(f"[DEBUG-BATTLE] {hero.name} Pre-Attack Stats → ATK: {hero.atk:,} | ADD: {hero.all_damage_dealt:.1f}% | HD: {hero.hd}")
-                for name, buff in hero.buffs.items():
-                    print(f"[DEBUG-BATTLE] {hero.name} buff {name}: {buff}")
+            if not hero.is_alive():
+                continue
 
-                if hero.energy >= 100 and not hero.has_silence:
-                    hero._using_real_attack = True
-                    skill_logs = hero.active_skill(boss, self)
-                    buffs_applied = []
-                    for ally in self.heroes:
-                        if ally.is_alive():
-                            buff_key = f"add_on_{hero.name}_active"
-                            success, _ = BuffHandler.apply_buff(
-                                ally, buff_key, {"attribute": "all_damage_dealt", "bonus": 3, "rounds": 9999}, boss
-                            )
-                            if success:
-                                buffs_applied.append((ally.name, "+3% All Damage Dealt"))
-                    if buffs_applied:
-                        logs.extend(group_team_buffs(buffs_applied))
-                    logs.extend(skill_logs)
-                    if hero.lifestar and hasattr(hero.lifestar, "on_after_action"):
-                        logs.extend(hero.lifestar.on_after_action(hero, self, boss) if isinstance(hero.lifestar, Nova) else hero.lifestar.on_after_action(hero, self))
-                    if hero.artifact and hasattr(hero.artifact, "on_active_skill"):
-                        logs.extend(hero.artifact.on_active_skill(self, boss))
-                    logs.extend(self.trigger_mff_passive(hero, boss))
-                    logs.extend(apply_foresight(hero, "active"))
-                    hero.energy = 0
-                    if self.pet and hasattr(self.pet, "on_hero_active"):
-                        self.pet.on_hero_active(hero)
-                    crit_occurred = any("CRIT" in str(line) for line in skill_logs)
-                    self.energy_gain_on_being_hit(hero, logs, crit_occurred)
-                    hero._using_real_attack = False
-                    logs.extend(boss.flush_counterattacks(self.heroes))
-                else:
-                    hero._using_real_attack = True
-                    skill_logs = hero.basic_attack(boss, self)
-                    logs.extend(skill_logs)
-                    if hero.lifestar and hasattr(hero.lifestar, "on_after_action"):
-                        logs.extend(hero.lifestar.on_after_action(hero, self, boss) if isinstance(hero.lifestar, Nova) else hero.lifestar.on_after_action(hero, self))
-                    logs.extend(self.trigger_mff_passive(hero, boss))
-                    logs.extend(apply_foresight(hero, "basic"))
-                    logs.append(grant_energy(hero, 50))
-                    crit_occurred = any("CRIT" in str(line) for line in skill_logs)
-                    self.energy_gain_on_being_hit(hero, logs, crit_occurred)
-                    hero._using_real_attack = False
-                    logs.extend(boss.flush_counterattacks(self.heroes))
+            hero.recalculate_stats()
+            print(f"[DEBUG-BATTLE] {hero.name} Pre-Attack Stats → ATK: {hero.atk:,} | ADD: {hero.all_damage_dealt:.1f}% | HD: {hero.hd}")
+            for name, buff in hero.buffs.items():
+                print(f"[DEBUG-BATTLE] {hero.name} buff {name}: {buff}")
 
+            hero._using_real_attack = True
+            if hero.energy >= 100 and not hero.has_silence:
+                skill_logs = hero.active_skill(boss, self)
+                logs.extend(skill_logs)
+                hero.energy = 0
 
+                # Buff sharing
+                buffs_applied = []
+                for ally in self.heroes:
+                    if ally.is_alive():
+                        key = f"add_on_{hero.name}_active"
+                        success, _ = BuffHandler.apply_buff(ally, key, {"attribute": "all_damage_dealt", "bonus": 3, "rounds": 9999}, boss)
+                        if success:
+                            buffs_applied.append((ally.name, "+3% All Damage Dealt"))
+                if buffs_applied:
+                    logs.extend(group_team_buffs(buffs_applied))
+
+                if hero.lifestar and hasattr(hero.lifestar, "on_after_action"):
+                    logs.extend(hero.lifestar.on_after_action(hero, self, boss) if isinstance(hero.lifestar, Nova) else hero.lifestar.on_after_action(hero, self))
+                if hero.artifact and hasattr(hero.artifact, "on_active_skill"):
+                    logs.extend(hero.artifact.on_active_skill(self, boss))
+                logs.extend(self.trigger_mff_passive(hero, boss))
+                logs.extend(apply_foresight(hero, "active"))
+                if self.pet and hasattr(self.pet, "on_hero_active"):
+                    self.pet.on_hero_active(hero)
+
+                crit_occurred = any("CRIT" in str(line) for line in skill_logs)
+                self.energy_gain_on_being_hit(hero, logs, crit_occurred)
+            else:
+                skill_logs = hero.basic_attack(boss, self)
+                logs.extend(skill_logs)
+                if hero.lifestar and hasattr(hero.lifestar, "on_after_action"):
+                    logs.extend(hero.lifestar.on_after_action(hero, self, boss) if isinstance(hero.lifestar, Nova) else hero.lifestar.on_after_action(hero, self))
+                logs.extend(self.trigger_mff_passive(hero, boss))
+                logs.extend(apply_foresight(hero, "basic"))
+                logs.append(grant_energy(hero, 50))
+
+                crit_occurred = any("CRIT" in str(line) for line in skill_logs)
+                self.energy_gain_on_being_hit(hero, logs, crit_occurred)
+
+            hero._using_real_attack = False
+            logs.extend(boss.flush_counterattacks(self.heroes))
+
+        # 🔄 Boss action phase
         boss_logs = boss.boss_action(self.heroes, round_num)
         logs.extend(boss_logs)
 
+
+        # 🌀 Lifestar reactive
         for line in boss_logs:
             for hero in self.heroes:
                 if hero.is_alive() and hero.lifestar and hasattr(hero.lifestar, "on_receive_attack"):
@@ -152,43 +167,38 @@ class Team:
                     if retaliation_logs:
                         logs.extend(retaliation_logs)
 
+        # 🟢 Crit reaction after boss skill
         crit_hit_heroes = [h for h in self.heroes if h.is_alive()]
         crit_occurred = any("CRIT" in str(line) and any(h.name in str(line) for h in crit_hit_heroes) for line in boss_logs)
         for hero in self.heroes:
             if hero.is_alive():
                 self.energy_gain_on_being_hit(hero, logs, crit_occurred)
 
+        # 🔄 Passive triggers (LBRM, PDE)
         for hero in self.heroes:
-            for effect in ["fear", "silence", "seal_of_light"]:
-                if hasattr(hero, "handle_self_control_removal"):
-                    removal_logs = hero.handle_self_control_removal(effect, boss, self)
-                    for log in removal_logs:
-                        if "removes" in log and "herself" in log:
-                            print(f"[DEBUG-CLEANSE] LBRM triggered cleanse: {log}")
-                    logs.extend(removal_logs)
+            if not hero.is_alive() or not hasattr(hero, "passive_trigger"):
+                continue
+            if hero.__class__.__name__ == "PDE":
+                pde_logs = hero.passive_trigger(self.heroes, boss, self)
+                for log in pde_logs:
+                    if "removes" in log and "from" in log:
+                        print(f"[DEBUG-CLEANSE] PDE triggered cleanse: {log}")
+                logs.extend(pde_logs)
+            else:
+                for ally in self.heroes:
+                    if ally != hero and ally.is_alive():
+                        p_logs = hero.passive_trigger(ally, boss, self)
+                        for log in p_logs:
+                            if "removes" in log and "from" in log:
+                                if hero.__class__.__name__ == "LBRM":
+                                    print(f"[DEBUG-CLEANSE] LBRM triggered cleanse on ally: {log}")
+                                else:
+                                    print(f"[DEBUG-CLEANSE] {hero.name} triggered cleanse: {log}")
+                        logs.extend(p_logs)
 
-        for hero in self.heroes:
-            if hero.is_alive() and hasattr(hero, "passive_trigger"):
-                if hero.__class__.__name__ == "PDE":
-                    pde_logs = hero.passive_trigger(self.heroes, boss, self)
-                    for log in pde_logs:
-                        if "removes" in log and "from" in log:
-                            print(f"[DEBUG-CLEANSE] PDE triggered cleanse: {log}")
-                    logs.extend(pde_logs)
-                else:
-                    for ally in self.heroes:
-                        if ally != hero and ally.is_alive():
-                            p_logs = hero.passive_trigger(ally, boss, self)
-                            for log in p_logs:
-                                if "removes" in log and "from" in log:
-                                    if hero.__class__.__name__ == "LBRM":
-                                        print(f"[DEBUG-CLEANSE] LBRM triggered cleanse on ally: {log}")
-                                    else:
-                                        print(f"[DEBUG-CLEANSE] {hero.name} triggered cleanse: {log}")
-                            logs.extend(p_logs)
-
-        logs = group_control_effects(logs)
+        logs = group_control_effects(logs, team=self)
         return logs
+
 
 
     def end_of_round(self, boss, round_num):

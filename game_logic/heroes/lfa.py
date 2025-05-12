@@ -72,7 +72,7 @@ class LFA(Hero):
         logs.extend(BuffHandler.apply_debuff(boss, unique_name, {
             "attribute": "atk", "bonus": -0.30, "rounds": 9999
         }))
-        steal_amount = int(boss.base_atk * 0.30)
+        steal_amount = int(boss.atk * 0.30)
         logs.extend(BuffHandler.apply_buff(self, "lfa_atk_steal_buff", {
             "attribute": "atk", "bonus": steal_amount, "rounds": 9999
         }, boss))

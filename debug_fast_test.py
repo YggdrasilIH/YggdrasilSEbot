@@ -30,9 +30,9 @@ def run_debugfast_terminal():
 
     data = [
         ("hero_MFF_Hero", 1.1e10, 6e7, 3800, "MP", "UW", dDB(), 15, 0, 0, 0, 0, 0, 0, 59, 40, 8000),
-        ("hero_SQH_Hero", 1.2e10, 7e7, 3670, "MP", "UW", dMirror(), 15, 0, 0, 0, 0, 0, 0, 59, 40, 9000),
-        ("hero_LFA_Hero", 2e10, 1.75e8, 3540, "MP", "BS", Antlers(), 15, 20, 150, 150, 600, 150, 150, 0, 16, 8999),
         ("hero_PDE_Hero", 0.9e10, 6e7, 3300, "MP", "UW", Scissors(), 15, 0, 0, 0, 0, 0, 0, 59, 40, 8444),
+        ("hero_SQH_Hero", 1.2e10, 7e7, 3670, "MP", "UW", dMirror(), 15, 0, 0, 0, 0, 0, 0, 59, 40, 9000),
+        ("hero_LFA_Hero", 2e10, 1.75e8, 3540, "MP", "BS", Antlers(), 15, 20, 150, 150, 130, 450, 90, 0, 16, 8999),
         ("hero_LBRM_Hero", 0.9e10, 5e7, 2000, "MP", "UW", Scissors(), 14, 0, 0, 0, 0, 0, 0, 59, 46, 8000),
         ("hero_DGN_Hero", 0.76e10, 9e7, 2300, "MP", "UW", Antlers(), 0, 0, 0, 0, 0, 0, 0, 40, 44, 5299)
     ]
@@ -85,7 +85,7 @@ def run_debugfast_terminal():
                     print(f"[DEBUG] {h.name} buff {name}: {buff}")
 
         hero_start_dmg = {h.name: h.total_damage_dealt for h in team.heroes}
-       # with suppress_stdout():
+        #with suppress_stdout():
         team.perform_turn(boss, round_num)
         team.end_of_round(boss, round_num)
         hero_end_dmg = {h.name: h.total_damage_dealt for h in team.heroes}

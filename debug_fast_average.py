@@ -43,18 +43,18 @@ def create_team_and_boss():
 
     data = [
         ("hero_MFF_Hero", 11e9, 6e7, 3800, "MP", "UW", dDB(), 15, 0, 0, 0, 0, 0, 0, 59, 40, 8000),
-        ("hero_SQH_Hero", 12e9, 7e7, 3440, "MP", "UW", dMirror(), 15, 0, 0, 0, 0, 0, 0, 59, 40, 9000),
-        ("hero_LFA_Hero", 20e9, 2e8, 3200, "MP", "BS", Antlers(), 15, 20, 150, 150, 600, 150, 150, 0, 16, 8999),
         ("hero_PDE_Hero", 9e9, 6e7, 2200, "MP", "UW", Scissors(), 15, 0, 0, 0, 0, 0, 0, 59, 40, 8444),
+        ("hero_SQH_Hero", 12e9, 7e7, 3440, "MP", "UW", dMirror(), 15, 0, 0, 0, 0, 0, 0, 59, 40, 9000),
+        ("hero_LFA_Hero", 20e9, 1.74e8, 3200, "MP", "BS", Antlers(), 15, 20, 150, 130, 140, 530, 90, 0, 16, 8999),
         ("hero_LBRM_Hero", 9.9e9, 5e7, 2000, "MP", "UW", dMirror(), 14, 0, 0, 0, 0, 0, 0, 59, 46, 8000),
-        ("hero_ELY_Hero", 9e9, 16e7, 2500, "ARP", "UW", Antlers(), 0, 0, 0, 0, 0, 0, 0, 40, 46, 7999)
+        ("hero_ELY_Hero", 7.4e9, 5e7, 2500, "MP", "UW", Antlers(), 0, 0, 0, 0, 0, 0, 0, 40, 46, 4999)
     ]
 
     heroes = []
     for hid, hp, atk, spd, purify, trait, artifact, dt_level, crit_rate, crit_dmg, precision, hd, skill_damage, add, dr, adr, armor in data:
         lifestar = None
-        if hid == "hero_PDE_Hero":
-            h.immune_control_effect = "seal_of_light"
+ #       if hid == "hero_PDE_Hero":
+  #          h.immune_control_effect = "seal_of_light"
 #        if hid == "hero_LBRM_Hero":
  #           h.immune_control_effect = "seal_of_light"
   #      if hid == "hero_LFA_Hero":

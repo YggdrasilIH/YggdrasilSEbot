@@ -47,16 +47,35 @@ class LBRM(Hero):
 
     def on_control_afflicted(self, target, effect):
         logs = []
-        if self.has_seal_of_light or self.energy < 30 or not getattr(target, f"has_{effect}", False):
+
+        if target == self:
+            return logs  # Self-cleanse happens elsewhere
+
+        if self.has_seal_of_light:
             return logs
+
+        # Only cleanse if control is actually applied
+        if not getattr(target, f"has_{effect}", False):
+            return logs
+
+        # Ensure we have enough energy to cleanse
+        if self.energy < 30:
+            return logs
+
+        # Cleanse immediately
         self.energy -= 30
         self.power_of_dream += 1
-        logs.append(clear_control_effect(target, effect))
-        actual = self.add_shield(int(self.atk * 15))
-        logs.append(f"🛡️ {self.name} gains {actual // 1_000_000}M shield (capped).")
 
+        logs.append(clear_control_effect(target, effect))
         logs.append(f"🪽 {self.name} removes {effect.replace('_', ' ').title()} from {target.name} (manual Wings). Shield granted, +1 Power of Dream.")
+
+        actual = target.add_shield(int(self.atk * 15))
+        logs.append(f"🛡️ {target.name} gains {actual // 1_000_000}M shield (capped).")
+
+        print(f"[DEBUG-CLEANSE] {self.name} triggered cleanse on ally: 🪽 {self.name} removes {effect} from {target.name} (Wings). +1 Power of Dream, shield granted.")
+
         return logs
+
 
     def start_of_battle(self, team, boss):
         self.ctrl_removal_limit = 1
@@ -241,9 +260,10 @@ class LBRM(Hero):
             return logs
 
         # Skip if ally has Dream Magic Wings with control removal stacks available
-        if getattr(ally, "extra_ctrl_removals", 0) > 0:
-            print(f"[DEBUG-LBRM-PASSIVE] Skipping cleanse for {ally.name} — Wings stack available ({ally.extra_ctrl_removals})")
+        if any(getattr(ally, f"has_{e}", False) and getattr(ally, "extra_ctrl_removals", 0) > 0 for e in ["fear", "silence", "seal_of_light"]):
+            print(f"[DEBUG-LBRM-PASSIVE] Skipping cleanse for {ally.name} — Effect present & Wings stack available")
             return logs
+
 
         if any([ally.has_silence, ally.has_fear, ally.has_seal_of_light]) and self.energy >= 30:
             effects = [e for e in ["silence", "fear", "seal_of_light"] if getattr(ally, f"has_{e}", False)]

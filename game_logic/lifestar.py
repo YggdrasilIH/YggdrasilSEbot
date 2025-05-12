@@ -173,54 +173,53 @@ class Specter:
             if isinstance(data, dict) and "attribute" in data and "bonus" in data and data["bonus"] < 0:
                 attr_reduction_groups[data["attribute"]].append((name, data))
 
-        logs = []
         converted_attrs = []
 
-        # ✅ Convert one full stack
+        # ✅ Convert 1 single debuff
         if attr_reduction_groups:
             chosen_attr = random.choice(list(attr_reduction_groups.keys()))
-            stack = attr_reduction_groups[chosen_attr]
-            for name, _ in stack:
-                hero.buffs.pop(name)
+            debuff_list = attr_reduction_groups[chosen_attr]
+            debuff_name, debuff_data = random.choice(debuff_list)
+            hero.buffs.pop(debuff_name)
 
-            total_bonus = sum(abs(d["bonus"]) for _, d in stack)
-            duration = max(d.get("rounds", 2) for _, d in stack)
-            is_percent = all(isinstance(d["bonus"], float) and abs(d["bonus"]) < 1.0 for _, d in stack)
+            bonus = abs(debuff_data["bonus"])
+            duration = debuff_data.get("rounds", 2)
+            is_percent = isinstance(debuff_data["bonus"], float) and abs(debuff_data["bonus"]) < 1.0
 
             buff_data = {
                 "attribute": chosen_attr,
-                "bonus": total_bonus,
+                "bonus": bonus,
                 "rounds": duration
             }
             if is_percent:
-                buff_data["is_percent"] = True  # Optional: for clarity or future use
+                buff_data["is_percent"] = True
 
             BuffHandler.apply_buff(hero, f"specter_convert_{chosen_attr}", buff_data)
-            logs.append(f"🔄 {hero.name} converts all reductions of {chosen_attr} (+{total_bonus}) for {duration} rounds.")
+            logs.append(f"🔄 {hero.name} converts 1 debuff of {chosen_attr} (+{bonus}) for {duration} rounds.")
             converted_attrs.append(chosen_attr)
 
-        # 🎲 30% chance to convert a second stack
+        # 🎲 30% chance to convert another single debuff
         remaining_attrs = [attr for attr in attr_reduction_groups if attr not in converted_attrs]
         if remaining_attrs and random.random() < 0.3:
             second_attr = random.choice(remaining_attrs)
-            stack = attr_reduction_groups[second_attr]
-            for name, _ in stack:
-                hero.buffs.pop(name)
+            debuff_list = attr_reduction_groups[second_attr]
+            debuff_name, debuff_data = random.choice(debuff_list)
+            hero.buffs.pop(debuff_name)
 
-            total_bonus = sum(abs(d["bonus"]) for _, d in stack)
-            duration = max(d.get("rounds", 2) for _, d in stack)
-            is_percent = all(isinstance(d["bonus"], float) and abs(d["bonus"]) < 1.0 for _, d in stack)
+            bonus = abs(debuff_data["bonus"])
+            duration = debuff_data.get("rounds", 2)
+            is_percent = isinstance(debuff_data["bonus"], float) and abs(debuff_data["bonus"]) < 1.0
 
             buff_data = {
                 "attribute": second_attr,
-                "bonus": total_bonus,
+                "bonus": bonus,
                 "rounds": duration
             }
             if is_percent:
                 buff_data["is_percent"] = True
 
             BuffHandler.apply_buff(hero, f"specter_convert_{second_attr}_extra", buff_data)
-            logs.append(f"✨ {hero.name} converts another reduction stack of {second_attr} (+{total_bonus}) for {duration} rounds (30% bonus proc).")
+            logs.append(f"✨ {hero.name} converts another debuff of {second_attr} (+{bonus}) for {duration} rounds (30% proc).")
 
         # 🎁 Apply early-round burst buffs
         if round_num <= 5:

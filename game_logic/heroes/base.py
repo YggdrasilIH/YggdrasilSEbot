@@ -114,17 +114,23 @@ class Hero:
         self.armor_break = self._base_armor_break
         self.dodge = self._base_dodge  # Reset first
 
+        # Accumulators for ATK split
+        percent_atk = 0
+        flat_atk = 0
+
         # Apply active buffs
         for buff in self.buffs.values():
             if isinstance(buff, dict):
-                attr = buff.get("attribute")
                 attr = buff.get("attribute", "").lower()
                 val = buff.get("bonus", 0)
 
                 if attr == "all_damage_dealt":
                     self.all_damage_dealt += val
                 elif attr == "atk":
-                    self.atk += val
+                    if abs(val) < 10:
+                        percent_atk += val
+                    else:
+                        flat_atk += val
                 elif attr == "armor":
                     self.armor += val
                 elif attr == "speed":
@@ -154,6 +160,8 @@ class Hero:
                 elif attr == "dodge":
                     self.dodge += val
 
+        # Final ATK computation: percent + flat
+        self.atk = int(self.original_atk * (1 + percent_atk)) + flat_atk
 
         # Hardcaps
         if self.precision > 150:
@@ -251,7 +259,6 @@ class Hero:
         if not self.is_alive():
             return [f"{self.name} is dead and skips end-of-round effects."]
 
-        self.decrement_control_effects()
 
         self.recalculate_stats()
         messages = []
@@ -284,6 +291,7 @@ class Hero:
                 messages.extend(artifact_logs)
         messages.extend(self.process_regen_buffs())
 
+        self.decrement_control_effects()
 
         messages.append(f"📉 {self.get_status_description()}")
         return messages
@@ -385,10 +393,10 @@ class Hero:
                        ctrl_immunity=70, hd=0, precision=100, artifact=artifact, lifestar=lifestar)
         elif hero_id == "hero_LFA_Hero":
             hero = LFA("LFA", hp, atk, armor=4200, spd=spd, crit_rate=20, crit_dmg=150,
-                       ctrl_immunity=70, hd=150, precision=150, artifact=artifact, lifestar=lifestar)
+                       ctrl_immunity=30, hd=150, precision=150, artifact=artifact, lifestar=lifestar)
         elif hero_id == "hero_MFF_Hero":
             hero = MFF("MFF", hp, atk, armor=4000, spd=spd, crit_rate=8, crit_dmg=150,
-                       ctrl_immunity=100, hd=0, precision=100, artifact=artifact, lifestar=lifestar)
+                       ctrl_immunity=70, hd=0, precision=100, artifact=artifact, lifestar=lifestar)
         elif hero_id == "hero_ELY_Hero":
             hero = ELY("ELY", hp, atk, armor=5000, spd=spd, crit_rate=9, crit_dmg=150,
                        ctrl_immunity=80, hd=0, precision=100, artifact=artifact, lifestar=lifestar)
@@ -403,7 +411,7 @@ class Hero:
                        ctrl_immunity=80, hd=0, precision=100, artifact=artifact, lifestar=lifestar)
         else:
             hero = cls("Default", hp, atk, armor=1000, spd=spd, crit_rate=10, crit_dmg=150,
-                       ctrl_immunity=100, hd=0, precision=100, artifact=artifact, lifestar=lifestar)
+                       ctrl_immunity=10, hd=0, precision=100, artifact=artifact, lifestar=lifestar)
         hero.energy = 50
         return hero
 

@@ -161,8 +161,34 @@ class Boss:
 
             for hero in heroes_to_add_calamity:
                 prev_calamity = hero.calamity
-                self.add_calamity_with_tracking(hero, 1, logs, boss=self)
+                hero.calamity += 1
                 print(f"[DEBUG] {hero.name} Calamity: {prev_calamity} → {hero.calamity} (from {attacker.name})")
+
+                # Trigger control at 5 layers
+                if prev_calamity < 5 and hero.calamity >= 5:
+                    from game_logic.control_effects import apply_control_effect
+
+                    effects_to_apply = [
+                        effect for effect in ["silence", "fear", "seal_of_light"]
+                        if hero.immune_control_effect != effect
+                    ]
+                    if effects_to_apply:
+                        control_logs, applied_effects = apply_control_effect(
+                            hero, effects_to_apply,
+                            boss=self, team=hero.team if hasattr(hero, "team") else None
+                        )
+                        logs.extend(control_logs)
+                        print(f"[DEBUG] {hero.name} afflicted with: {applied_effects}")
+                    else:
+                        logs.append(f"❌ {hero.name} is immune to all control effects — no control applied.")
+
+                    hero.calamity = 0
+                    print(f"[DEBUG] {hero.name} Calamity reset to 0 after triggering effects.")
+
+                    if hasattr(hero, "handle_self_control_removal"):
+                        for effect in ["fear", "silence", "seal_of_light"]:
+                            logs += hero.handle_self_control_removal(effect, self, hero.team)
+
                 calamity_heroes.append(hero.name)
                 calamity_totals.append(str(hero.calamity))
 
@@ -180,8 +206,8 @@ class Boss:
         print(f"[DEBUG] flush_counterattacks complete → {len(self._counterattack_sources)} sources, total hits: {len(heroes) * len(self._counterattack_sources)}")
         self._pending_counterattack_needed = False
         self._counterattack_sources = set()
-
         return logs
+
 
 
     def apply_curse_of_decay_damage(self, hero, cod_logs):
@@ -255,13 +281,18 @@ class Boss:
         hero.hp -= damage
         hero.hp = max(hero.hp, 0)
 
+        hero._last_damage_received = damage
+
+
         return damage
 
     def boss_deal_damage_to_hero(self, hero, base_damage):
         return self.calculate_damage_to_hero(hero, base_damage)
 
-    def add_calamity_with_tracking(self, hero, amount, logs, boss=None):
+    def add_calamity_with_tracking(self, hero, amount, logs, boss=None, team=None):
         from logging import debug
+        from game_logic.control_effects import apply_control_effect
+
         previous = hero.calamity
         hero.calamity += amount
         debug(f"[DEBUG] {hero.name} Calamity: {previous} → {hero.calamity} (added {amount})")
@@ -269,7 +300,11 @@ class Boss:
 
         if previous < 5 and hero.calamity >= 5:
             debug(f"[DEBUG] {hero.name} triggered Calamity threshold (>=5)")
-            from game_logic.control_effects import apply_control_effect
+
+            if not team and hasattr(hero, "team"):
+                team = hero.team
+            if not boss:
+                boss = self
 
             effects_to_apply = [
                 effect for effect in ["silence", "fear", "seal_of_light"]
@@ -278,26 +313,24 @@ class Boss:
             debug(f"[DEBUG] {hero.name} is immune to: {hero.immune_control_effect}")
             debug(f"[DEBUG] {hero.name} eligible control effects: {effects_to_apply}")
 
+            # Apply control effects with -100 ctrl immunity bypass
             if effects_to_apply:
-                control_logs, applied_effects = apply_control_effect(
-                    hero,
-                    effects_to_apply,
-                    boss=boss,
-                    team=hero.team if hasattr(hero, 'team') else None
+                control_logs, applied = apply_control_effect(
+                    hero, effects_to_apply, boss=boss, team=team
                 )
                 logs.extend(control_logs)
-                debug(f"[DEBUG] {hero.name} afflicted with: {applied_effects}")
+                debug(f"[DEBUG] {hero.name} afflicted with: {applied}")
             else:
                 logs.append(f"❌ {hero.name} is immune to all control effects — no control applied.")
-                debug(f"[DEBUG] {hero.name} received no control effects (full immunity)")
 
-
-
-            # Reset Calamity
-            debug(f"[DEBUG] {hero.name} Calamity reset to 0 after triggering effects")
             hero.calamity = 0
+            debug(f"[DEBUG] {hero.name} Calamity reset to 0 after triggering effects.")
 
+            if hasattr(hero, "handle_self_control_removal"):
+                for effect in ["fear", "silence", "seal_of_light"]:
+                    logs += hero.handle_self_control_removal(effect, self, team)
 
+        return logs
 
 
 
@@ -324,26 +357,27 @@ class Boss:
             if not hero.is_alive():
                 continue
 
-                        # ✅ Dodge check
+            # ✅ Dodge check
             mystical_chance = 0.15 if "mystical_veil" in hero.buffs else 0
             dodge_chance = mystical_chance + getattr(hero, "dodge", 0) / 100
             dodge_chance = min(dodge_chance, 1.0)
 
             if random.random() < dodge_chance:
-                logs.append(f"🌀 {hero.name} dodges the boss {'active skill' if 'active_skill' in __name__ else 'basic attack'}!")
+                logs.append(f"🌀 {hero.name} dodges the boss active skill!")
                 if mystical_chance > 0:
                     veil = hero.buffs["mystical_veil"]
                     veil["layers"] -= 1
                     if veil["layers"] <= 0:
                         del hero.buffs["mystical_veil"]
-                continue
+                continue  # ❌ Skip damage and all effects if dodged
 
+            # ✅ Skill hits
             total_damage = 0
             for _ in range(3):
                 total_damage += self.boss_deal_damage_to_hero(hero, int(self.atk * 30))
             damage_lines.append(f"{hero.name} ({total_damage // 1_000_000}M)")
 
-            # Apply debuffs silently
+            # Apply debuffs
             hero.apply_buff("armor_down", {"attribute": "armor", "bonus": -1.0, "rounds": 3, "is_percent": True})
             hero.apply_buff("atk_steal", {"attribute": "atk", "bonus": -0.08, "rounds": 3})
 
@@ -361,11 +395,10 @@ class Boss:
             logs.append(f"💀 {', '.join(curse_names)} gained 2 layers of Curse (Totals: {', '.join(curse_totals)})")
         if calamity_names:
             logs.append(f"☠️ {', '.join(calamity_names)} gained 2 layers of Calamity (Totals: {', '.join(calamity_totals)})")
-
         if damage_lines:
             logs.append(f"💥 Boss active hits→ {', '.join(damage_lines)}")
         return logs
-
+    
     def basic_attack(self, heroes, round_num):
         logs = []
         damage_lines = []
@@ -376,34 +409,32 @@ class Boss:
             if not hero.is_alive():
                 continue
 
-                        # ✅ Dodge check
+            # ✅ Dodge check
             mystical_chance = 0.15 if "mystical_veil" in hero.buffs else 0
             dodge_chance = mystical_chance + getattr(hero, "dodge", 0) / 100
             dodge_chance = min(dodge_chance, 1.0)
 
             if random.random() < dodge_chance:
-                logs.append(f"🌀 {hero.name} dodges the boss {'active skill' if 'active_skill' in __name__ else 'basic attack'}!")
+                logs.append(f"🌀 {hero.name} dodges the boss basic attack!")
                 if mystical_chance > 0:
                     veil = hero.buffs["mystical_veil"]
                     veil["layers"] -= 1
                     if veil["layers"] <= 0:
                         del hero.buffs["mystical_veil"]
-                continue
+                continue  # ❌ Skip damage and all effects if dodged
 
+            # ✅ Skill hits
             total_damage = 0
             for _ in range(3):
                 total_damage += self.boss_deal_damage_to_hero(hero, int(self.atk * 20))
             damage_lines.append(f"{hero.name} ({total_damage // 1_000_000}M)")
 
-            # Apply debuff silently
+            # Apply debuff
             hero.apply_buff("crit_down", {"attribute": "crit_rate", "bonus": -20, "rounds": 3})
 
             # Apply Calamity
-            previous_calamity = hero.calamity
             self.add_calamity_with_tracking(hero, 1, logs, boss=self)
-
             if random.random() < 0.75:
-                previous_calamity = hero.calamity
                 self.add_calamity_with_tracking(hero, 1, logs, boss=self)
 
             calamity_names.append(hero.name)
@@ -415,6 +446,7 @@ class Boss:
         if damage_lines:
             logs.append(f"💥 Boss basic hits→ {', '.join(damage_lines)}")
         return logs
+
 
 
     
@@ -474,6 +506,7 @@ class Boss:
     def end_of_round_effects(self, heroes, round_num):
         logs = [f"🔄 Boss end-of-round (Round {round_num})"]
         logs.extend(self.process_poison_and_other_effects())
+        alive_heroes = [h for h in heroes if h.is_alive()]
 
         if self.shrink_debuff:
             self.shrink_debuff["rounds"] -= 1
@@ -490,11 +523,11 @@ class Boss:
             self.recalculate_stats()
 
 
-        alive_heroes = [h for h in heroes if h.is_alive()]
+        
         if alive_heroes:
             hero_high = max(alive_heroes, key=lambda h: h.atk)
             hero_high.energy = max(hero_high.energy - 100, 0)
-            hero_high.apply_buff("boss_attack_debuff", {"attribute": "atk", "bonus": -0.40, "rounds": 2})
+            hero_high.apply_buff("boss_attack_debuff", {"attribute": "atk", "bonus": -0.40 * hero_high.atk, "rounds": 2})
             hero_high.curse_of_decay += 3
             logs.append(f"🌀 Drains {hero_high.name}: -100 energy, -40% ATK, +3 Curse")
 
@@ -509,19 +542,57 @@ class Boss:
         })
         logs.append(f"📈 Boss gains +15% ATK")
 
-        if alive_heroes:
-            highest_atk = max(alive_heroes, key=lambda h: h.atk)
-            if highest_atk.calamity > 0:
+        for hero in alive_heroes:
+            if hero.calamity > 0:
                 attr_buffs = [
-                    k for k, v in highest_atk.buffs.items()
+                    k for k, v in hero.buffs.items()
                     if isinstance(v, dict) and v.get("attribute") in BuffHandler.ATTRIBUTE_BUFF_KEYS
                 ]
                 if attr_buffs:
                     chosen_attr = random.choice(attr_buffs)
-                    removed_keys = [k for k, v in highest_atk.buffs.items() if isinstance(v, dict) and v.get("attribute") == chosen_attr]
+                    removed_keys = [k for k, v in hero.buffs.items() if isinstance(v, dict) and v.get("attribute") == chosen_attr]
                     for key in removed_keys:
-                        del highest_atk.buffs[key]
-                    logs.append(f"Boss removes all '{chosen_attr}' buffs from {highest_atk.name} ({len(removed_keys)} stack{'s' if len(removed_keys)!=1 else ''})")
+                        # Revert stat before removing buff
+                        buff = hero.buffs[key]
+                        bonus = buff.get("bonus", 0)
+                        attr = buff.get("attribute")
+                        internal_attr = BuffHandler.ALIAS_MAP.get(attr, attr)
+
+                        try:
+                            if internal_attr == "atk":
+                                hero.atk -= bonus
+                            elif internal_attr == "armor":
+                                hero.armor -= bonus
+                            elif internal_attr == "speed":
+                                hero.speed -= bonus
+                            elif internal_attr == "skill_damage":
+                                hero.skill_damage -= bonus
+                            elif internal_attr == "precision":
+                                hero.precision -= bonus
+                            elif internal_attr == "block":
+                                hero.block -= bonus
+                            elif internal_attr == "crit_rate":
+                                hero.crit_rate -= bonus
+                            elif internal_attr == "crit_dmg":
+                                hero.crit_dmg -= bonus
+                            elif internal_attr == "armor_break":
+                                hero.armor_break -= bonus
+                            elif internal_attr == "ctrl_immunity":
+                                hero.ctrl_immunity -= bonus
+                            elif internal_attr == "DR":
+                                hero.DR -= bonus
+                            elif internal_attr == "HD":
+                                hero.hd -= bonus
+                            elif internal_attr == "ADR":
+                                hero.ADR -= bonus
+                            elif internal_attr == "energy":
+                                hero.energy -= bonus
+                        except Exception:
+                            pass
+
+                        del hero.buffs[key]
+
+                    logs.append(f"🧹 Boss removes all '{chosen_attr}' buffs from {hero.name} ({len(removed_keys)} stack{'s' if len(removed_keys)!=1 else ''})")
 
 
         for hero in alive_heroes:
